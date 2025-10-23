@@ -49,7 +49,6 @@
  literals-of-clause
  clauses-of
  n-true-literals
- generate-sat-instance
 
  ;non-solvable
  literals-with-clause-index-of
