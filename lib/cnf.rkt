@@ -448,9 +448,8 @@
       (dp-literal var (random-ref '(#t #f))))
 
     ; XXX: magic number
-    (dp-cnf-clause (map generate-literal-from-var (draw-k-var n-vars (if arity
-                                                                         arity
-                                                                         (random 2 5))))))
+    (dp-cnf-clause (map generate-literal-from-var
+						(draw-k-var n-vars (or arity (random 2 4))))))
  
   (define (generate-sat-instance-aux i n-vars res-sat-instance)
        (cond [(eq? i n-clauses) res-sat-instance]
