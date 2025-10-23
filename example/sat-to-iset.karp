@@ -1,0 +1,71 @@
+#lang karp/reduction
+
+(require "sat.karp"
+         "iset.karp"
+         karp/lib/cnf
+         karp/lib/graph
+         karp/lib/graph-inspector
+         karp/lib/mapping-reduction)
+
+(define-forward-instance-construction
+  #:from sat #:to iset
+  (sat->iset-v1 a-sat-inst)
+
+  (define Cs (clauses-of (φ a-sat-inst)))
+  
+  (define V (for/set {(el l i) for [l ∈ (literals-of C)]
+                               for [(C #:index i) ∈ Cs #;(clauses-of (φ a-sat-inst))]}))
+
+  ;; Make a clique of each clause's literals
+  (define E1 (for/set {((el (fst p) i) . -e- . (el (snd p) i))
+              for [p ∈ (all-pairs-in (literals-of C))]
+              for [(C #:index i) ∈ Cs]}))
+
+  ;; Wire up the cross-clause disagreements
+  (define E2 (for/set {((el l1 i) . -e- . (el l2 j))
+              for [l1 ∈ (literals-of C1)] for [l2 ∈ (literals-of C2)]
+              for [(C1 #:index i) ∈ Cs] for [(C2 #:index j) ∈ Cs]
+              if (literal-neg-of? l1 l2)}))
+
+  (create-iset-instance ([G (create-graph V (set-∪ E1 E2))]
+                         [k (set-size Cs)])))
+
+(define-forward-certificate-construction
+  #:from sat #:to iset
+  (sat->iset->>-cert-v1 f->t-constr a-sat-inst c^sat)
+
+  (for/set {(el
+             (find-one [l ∈ C] s.t. (or (and (positive-literal? l)
+                                             (lookup c^sat (underlying-var l)))
+                                        (and (negative-literal? l)
+                                             (not (lookup c^sat (underlying-var l))))))
+             i)
+             for [(C #:index i) in (φ a-sat-inst)]})
+  )
+
+(define-backward-certificate-construction
+  #:from sat #:to iset 
+  (sat->iset-<<-cert-v1 f->t-constr a-sat-inst c^iset)
+
+  (define X (vars-of (φ a-sat-inst)))
+  (define X-True
+    (for/set {x for [x ∈ X]
+                if (∃ [v in c^iset]
+                      (and
+                       (positive-literal? (_1s v))
+                       (equal? (underlying-var (_1s v)) x)))}))
+  (mapping
+   [x ∈ X-True] ~> #t
+   [x ∈ (set-minus X X-True)] ~> #f))
+
+
+
+
+(define/sat-instance foo ([φ (cnf ('x1 ∨ 'x2 ∨ 'x3)
+                                   ((¬'x1) ∨ (¬'x2) ∨ 'x4))]))
+(sat->iset-v1 foo)
+
+(check-reduction #:from sat #:to iset
+                 sat->iset-v1 sat->iset->>-cert-v1 sat->iset-<<-cert-v1)
+
+(visualize (G (sat->iset-v1 (get-counterexample))))
