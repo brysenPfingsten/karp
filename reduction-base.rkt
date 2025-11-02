@@ -139,7 +139,7 @@
 
 
 ; set comprehension and constructors
-(provide for/set
+(provide for/set for/set/acc
          define/sets
          ;foreach/set
          find-one
@@ -248,6 +248,33 @@
                                            x-y-res-type
                                            prop:corr x-in-X.x)
                          x-y-res))))))))]))
+
+(define-syntax for/set/acc
+  (syntax-parser
+    [(_ acc {elem-expr (~seq , elem-expr1) ... (~seq (~datum for) x-in-X:element-of-a-set) ...+
+                   (~optional (~seq (~datum if) pred-elem))})
+     ; Question: how to simplify the pred-elem part here?
+     #:with (x-in-X/kc ...)
+     (let ([xs (syntax->list #'(x-in-X.x ...))]
+           [inds (syntax->list #'((~? x-in-X.ind #f) ...))]
+           [Xs (syntax->list #'(x-in-X.X ...))])
+       (for/list ([i (range 1 (+ (length Xs) 1))]
+                  [an-x xs]
+                  [an-ind inds]
+                  [an-X Xs])
+         #`[#,(if (syntax-e an-ind) #`(#,an-x #:index #,an-ind) an-x) ∈ (contracted-v/kc
+            dp-set/kc #,an-X (syntax-srcloc #'#,an-X) 'for/set
+            (list (format "the ~v~s set" #,i
+                          '#,(ordinal-numeral i))))]))
+     #`(let ([res (dp-list->set
+                    (for/set-core ((dp-wrap-if-raw-int elem-expr)
+                                  (dp-wrap-if-raw-int elem-expr1) ...)
+                                  x-in-X/kc ...
+                    #,@(if (attribute pred-elem)
+                            #'(#:if pred-elem)
+                            #'(#:if))))])
+       (set! acc (append acc (list res)))
+       res)]))
 
 (define-syntax for/set
   (syntax-parser
@@ -373,6 +400,7 @@
          (λ (x-in-X.x)
            (let* ([x-res #,(if (attribute el-type) #'(el-type x-expr) #'x-expr)]
                   [x-res-type (match-let-values ([(x-res-type _) (struct-info x-res)]) x-res-type)])
+             (displayln x-res)
              (if x-res-type
                  (chaperone-struct x-res
                                    x-res-type

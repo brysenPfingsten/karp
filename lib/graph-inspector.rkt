@@ -6,12 +6,16 @@
          (except-in mrlib/graph dot-positioning)
          framework
          (only-in "../private/core-structures.rkt"
+                  set-∪
+                  dp-list->set
                   dp-set-members->list
                   [set dp-set])
          (only-in "modified/dot.rkt" dot-positioning)
+         (only-in "../reduction-base.rkt"
+                  el?)
          "graph.rkt")
 
-(provide visualize render-graph/snip)
+(provide visualize visualize/step render-graph/snip)
 
 (define vertex-snip-class%
   (class snip-class%
@@ -98,19 +102,67 @@
   
   graph-pb)
 
+;; (ListOf set(verticles) set(edges)) --> ()
+(define (visualize/step verts-and-edges [title "Graph"])
+  (define index 0)
+  (define (generate-graph n)
+    ;; TODO (set? es/vs) set predicate? contract?
+    (define (edges? es) (andmap (lambda (e) (not (el? e))) (dp-set-members->list es)))
+    (define (verts? vs) (andmap el? (dp-set-members->list vs)))
+    (define shrunk-list (take verts-and-edges (add1 n)))
+    (define just-verts (filter verts? shrunk-list))
+    (define just-edges (filter edges? shrunk-list))
+    (display (append just-verts just-edges))
+    (define edges (foldl (lambda (s acc) (set-∪ s acc)) (dp-set) just-edges))
+    (define vertices (foldl (lambda (s acc) (set-∪ s acc)) (dp-set) just-verts))
+    (create-graph vertices edges))
+  (define toplevel (new frame% [label title] [width 800] [height 600]))
 
-(define (visualize a-k-graph [title "Graph"])
-  
-  (define toplevel (instantiate frame% ()
-                     (label title)
-                     (width 600)
-                     (height 400)))
+  ;; Layout: toolbar on top, canvas fills the rest
+  (define root (new vertical-panel% [parent toplevel]
+                    [stretchable-width #t] [stretchable-height #t]))
+  (define toolbar (new horizontal-panel% [parent root]
+                       [stretchable-height #f] [stretchable-width #t]))
 
-  (define the-graph-pb (to-graph-pb a-k-graph))
-  
-  (define canvas (new editor-canvas% [parent toplevel] [editor the-graph-pb])) 
+  (define the-graph-pb (to-graph-pb (generate-graph index)))
+  (define canvas (new editor-canvas% [parent root] [editor the-graph-pb]
+                      [style '(auto-hscroll auto-vscroll)]))
+
+  ;; Step Button
+  (new button% [parent toolbar] [label "Step"]
+       [callback (λ (_btn _evt)
+                   (set! index (add1 index))
+                   (define pb* (to-graph-pb (generate-graph index)))
+                   (send canvas set-editor pb*)
+                   )])
+
   (send toplevel show #t))
 
+(define (visualize a-k-graph [title "Graph"])
+  (define toplevel (new frame% [label title] [width 800] [height 600]))
+
+  ;; Layout: toolbar on top, canvas fills the rest
+  (define root (new vertical-panel% [parent toplevel]
+                    [stretchable-width #t] [stretchable-height #t]))
+  (define toolbar (new horizontal-panel% [parent root]
+                       [stretchable-height #f] [stretchable-width #t]))
+
+  (define the-graph-pb (to-graph-pb a-k-graph))
+  (define canvas (new editor-canvas% [parent root] [editor the-graph-pb]
+                      [style '(auto-hscroll auto-vscroll)]))
+
+  ;; Examples
+  (new button% [parent toolbar] [label "Re-layout"]
+       [callback (λ (_btn _evt)
+                   (dot-positioning the-graph-pb dot-label #f (dp-graph-directed? a-k-graph))
+                   (send the-graph-pb refresh-now))])
+
+  (new button% [parent toolbar] [label "Center View"]
+       [callback (λ (_btn _evt)
+                   (send the-graph-pb scroll-to 0 0)
+                   (send the-graph-pb refresh-now))])
+
+  (send toplevel show #t))
 
 ; See rosette/value-browser.rkt
 
