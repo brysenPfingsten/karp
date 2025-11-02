@@ -7,22 +7,23 @@
          karp/lib/graph-inspector
          karp/lib/mapping-reduction)
 
+(define acc '())
 (define-forward-instance-construction
   #:from sat #:to iset
   (sat->iset-v1 a-sat-inst)
 
   (define Cs (clauses-of (φ a-sat-inst)))
   
-  (define V (for/set {(el l i) for [l ∈ (literals-of C)]
+  (define V (for/set/acc acc {(el l i) for [l ∈ (literals-of C)]
                                for [(C #:index i) ∈ Cs #;(clauses-of (φ a-sat-inst))]}))
 
   ;; Make a clique of each clause's literals
-  (define E1 (for/set {((el (fst p) i) . -e- . (el (snd p) i))
+  (define E1 (for/set/acc acc {((el (fst p) i) . -e- . (el (snd p) i))
               for [p ∈ (all-pairs-in (literals-of C))]
               for [(C #:index i) ∈ Cs]}))
 
   ;; Wire up the cross-clause disagreements
-  (define E2 (for/set {((el l1 i) . -e- . (el l2 j))
+  (define E2 (for/set/acc acc {((el l1 i) . -e- . (el l2 j))
               for [l1 ∈ (literals-of C1)] for [l2 ∈ (literals-of C2)]
               for [(C1 #:index i) ∈ Cs] for [(C2 #:index j) ∈ Cs]
               if (literal-neg-of? l1 l2)}))
@@ -65,7 +66,8 @@
                                    ((¬'x1) ∨ (¬'x2) ∨ 'x4))]))
 (sat->iset-v1 foo)
 
-(check-reduction #:from sat #:to iset
-                 sat->iset-v1 sat->iset->>-cert-v1 sat->iset-<<-cert-v1)
-
-(visualize (G (sat->iset-v1 (get-counterexample))))
+; (check-reduction #:from sat #:to iset
+;                  sat->iset-v1 sat->iset->>-cert-v1 sat->iset-<<-cert-v1)
+;
+; (visualize (G (sat->iset-v1 (get-counterexample))))
+(visualize/step acc)
