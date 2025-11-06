@@ -176,13 +176,9 @@
 ; starts with 1
 ; should not be used in solver
 (define (dp-set-element-index a-set)
-  (let ([mem-list (dp-set-members->list a-set)])
-    (make-immutable-hash
-     (map
-      (λ (v)
-        (cons v
-              (dp-int-wrap (+ (index-of mem-list v) 1) 'poly)))
-      mem-list))))
+  (for/hash ([v (dp-set-members->list a-set)]
+             [i (in-naturals 1)])
+    (values v (dp-int-wrap i 'poly))))
 
 (define/contract/kc (index-in e a-set)
   (->k ([e any/kc] [a-set dp-set/kc]) any/kc)
