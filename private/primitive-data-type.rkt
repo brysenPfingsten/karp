@@ -348,9 +348,7 @@
         [else 'const])))
 
 (define (dp-int-not-exp-size/c x)
-  (if (equal? (dp-int-size-of x) 'exp)
-      #f
-      #t))
+  (not (equal? (dp-int-size-of x) 'exp)))
 
 (define-simple-contract/kc dp-int-not-exp-size/kc (v)
   (not (equal? (dp-int-size-of v) 'exp))
