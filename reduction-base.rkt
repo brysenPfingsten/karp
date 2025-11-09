@@ -199,9 +199,8 @@
 
 (define-syntax for/set/acc
   (syntax-parser
-    [(_ acc {elem-expr (~seq , elem-expr1) ... (~seq (~datum for) x-in-X:element-of-a-set) ...+
+    [(_ acc {elem-expr (~seq , elem-expr1) ... (~seq (~datum for) (~optional #:step-each) x-in-X:element-of-a-set) ...+
                    (~optional (~seq (~datum if) pred-elem))})
-     ; Question: how to simplify the pred-elem part here?
      #:with (x-in-X/kc ...)
      (let ([xs (syntax->list #'(x-in-X.x ...))]
            [inds (syntax->list #'((~? x-in-X.ind #f) ...))]
@@ -218,17 +217,14 @@
                     (for/set-core ((dp-wrap-if-raw-int elem-expr)
                                   (dp-wrap-if-raw-int elem-expr1) ...)
                                   x-in-X/kc ...
-                    #,@(if (attribute pred-elem)
-                            #'(#:if pred-elem)
-                            #'(#:if))))])
+                                  #:if (~? pred-elem)))])
        (set! acc (append acc (list res)))
        res)]))
 
 (define-syntax for/set
   (syntax-parser
-    [(_ {elem-expr (~seq , elem-expr1) ... (~seq (~datum for) x-in-X:element-of-a-set) ...+
+    [(_ {elem-expr (~seq , elem-expr1) ... (~seq (~datum for) (~optional #:step-each) x-in-X:element-of-a-set) ...+
                    (~optional (~seq (~datum if) pred-elem))})
-     ; Question: how to simplify the pred-elem part here?
      #:with (x-in-X/kc ...)
      (let ([xs (syntax->list #'(x-in-X.x ...))]
            [inds (syntax->list #'((~? x-in-X.ind #f) ...))]
@@ -241,28 +237,25 @@
             dp-set/kc #,an-X (syntax-srcloc #'#,an-X) 'for/set
             (list (format "the ~v~s set" #,i
                           '#,(ordinal-numeral i))))]))
-     #`(dp-list->set
+     #'(dp-list->set
         (for/set-core ((dp-wrap-if-raw-int elem-expr)
                        (dp-wrap-if-raw-int elem-expr1) ...)
                        x-in-X/kc ...
-         #,@(if (attribute pred-elem)
-                #'(#:if pred-elem)
-                #'(#:if))))]))
+         #:if (~? pred-elem)))]))
 
 
 (define-syntax for/set-core
   (syntax-parser
-    [(_ (elem-expr ...+) x-in-X:element-of-a-set 
-                   #:if (~optional pred-expr))
+    [(_ (elem-expr ...+) x-in-X:element-of-a-set #:if (~optional pred-expr))
      #:with (elem-res-type ...) (generate-temporaries #'(elem-expr ...))
      ; NOTE: ``dp-set-element-index'' already shrinked the set
-     #`(apply
+     #'(apply
         append
         (let ([elem-with-index (dp-set-element-index x-in-X.X)])
           (for*/list ([x-in-X.x (hash-keys elem-with-index)]
-                        [#,(if (attribute x-in-X.ind) #'x-in-X.ind #'i)
+                        [(~? x-in-X.ind i)
                          (list (hash-ref elem-with-index x-in-X.x))]
-                        #:when #,(if (attribute pred-expr) #'pred-expr #'#t))
+                        (~? (~@ #:when pred-expr)))
               ; TODO: Get (elem-res-type ...) for  (elem-expr ...)
               (let ([elem-res-type (match-let-values ([(elem-res-type _) (struct-info elem-expr)]) elem-res-type)]
                     ...)
@@ -278,19 +271,15 @@
                     elem-expr)
                  ...)
                 ))))]
-    [(_ (elem-expr ...+) x-in-X:element-of-a-set ...+ #:if
-        (~optional pred-elem))
+    [(_ (elem-expr ...+) x-in-X:element-of-a-set ...+ #:if (~optional pred-elem))
      #:with (x0-in-X0:element-of-a-set ... xn-in-Xn:element-of-a-set) #'(x-in-X ...)
-     #`(apply
+     #'(apply
         append
         (let ([el-with-index (dp-set-element-index xn-in-Xn.X)])
            (for*/list ([xn-in-Xn.x (hash-keys el-with-index)]
-                       [#,(if (attribute xn-in-Xn.ind) #'xn-in-Xn.ind #'i)
+                       [(~? xn-in-Xn.ind i)
                         (list (hash-ref el-with-index xn-in-Xn.x))])
-             (for/set-core (elem-expr ...) x0-in-X0 ...
-               #,@(if (attribute pred-elem)
-                      #'(#:if pred-elem)
-                      #'(#:if))))))]))
+             (for/set-core (elem-expr ...) x0-in-X0 ... #:if (~? pred-elem)))))]))
 
 ; TODO: fix the following issue:
 ; for [j ∈ (ints-from-to 0 i)] for [(v #:index i) ∈ Vars])
@@ -666,7 +655,7 @@
     [(_ (~seq #:from s)
         (~seq #:to t)
         (proc-id:id inst-id:id #:gui step-id:id)
-        (~and body* ((~literal define) v:id ((~literal for/set) . parts))) ... final)
+        (~and body* ((~datum define) v:id ((~datum for/set) . parts))) ... final)
      (with-syntax (;[s->t-construction (format-id #'s "~a->~a" #'s #'t)]
                    [a-s-instance (format-id #'s "a-~a-instance" #'s)]
                    #;[s->t-construction/c
