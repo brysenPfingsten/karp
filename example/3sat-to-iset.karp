@@ -3,33 +3,33 @@
 (require "3sat.karp"
          "iset.karp"
          "racket-extras.rkt"
+         "../el.rkt"
          racket/pretty
          karp/lib/cnf
          karp/lib/graph
          karp/lib/graph-inspector
          karp/lib/mapping-reduction)
 
-(define acc empty)
 (define-forward-instance-construction
   #:from 3sat #:to iset
-  (3sat->iset-v1 a-3sat-inst)
-
-  (define Cs (clauses-of (φ a-3sat-inst)))
+  (3sat->iset-v1 a-3sat-inst ;; #:gui 3sat->iset-v1/gui
+   )
   
-  (define V (for/set/acc acc {(el l i) for [l ∈ (literals-of C)]
-                               for [(C #:index i) ∈ Cs]}))
+  (define V (for/set {(el l i) for [l ∈ (literals-of C)]
+                               for [(C #:index i) ∈ (clauses-of (φ a-3sat-inst))]}))
   
-  (define E1 (for/set/acc acc {((el l1 i) . -e- . (el l2 j))
+  (define E1 (for/set {((el l1 i) . -e- . (el l2 j))
               for [l1 ∈ (literals-of C1)] for [l2 ∈ (literals-of C2)]
-              for [(C1 #:index i) ∈ Cs] for [(C2 #:index j) ∈ Cs]
+              for [(C1 #:index i) ∈ (clauses-of (φ a-3sat-inst))]
+              for [(C2 #:index j) ∈ (clauses-of (φ a-3sat-inst))]
               if (literal-neg-of? l1 l2)}))
   
-  (define E2 (for/set/acc acc {((el (fst p) i) . -e- . (el (snd p) i))
+  (define E2 (for/set {((el (fst p) i) . -e- . (el (snd p) i))
               for [p ∈ (all-pairs-in (literals-of C))]
-              for [(C #:index i) ∈ Cs]}))
+              for [(C #:index i) ∈ (clauses-of (φ a-3sat-inst))]}))
 
   (create-iset-instance ([G (create-graph V (set-∪ E1 E2))]
-                         [k (set-size Cs)])))
+                         [k (set-size (clauses-of (φ a-3sat-inst)))])))
 
 (define-forward-certificate-construction
   #:from 3sat #:to iset
@@ -64,12 +64,10 @@
 
 (define/3sat-instance foo ([φ (cnf ('x1 ∨ 'x2 ∨ 'x3)
                                    ((¬'x1) ∨ (¬'x2) ∨ 'x4))]))
-(3sat->iset-v1 foo)
+#;(3sat->iset-v1/gui foo)
 
-#;(check-reduction #:from 3sat #:to iset
+(check-reduction #:from 3sat #:to iset
                  3sat->iset-v1 3sat->iset->>-cert-v1 3sat->iset-<<-cert-v1)
-acc
 
-#;(visualize (G (3sat->iset-v1 (get-counterexample))))
-(visualize/step acc)
 
+(visualize (G (3sat->iset-v1 (get-counterexample))))

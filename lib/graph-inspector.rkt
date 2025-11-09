@@ -11,8 +11,7 @@
                   dp-set-members->list
                   [set dp-set])
          (only-in "modified/dot.rkt" dot-positioning)
-         (only-in "../reduction-base.rkt"
-                  el?)
+         (only-in "../el.rkt" el?)
          "graph.rkt")
 
 (provide visualize visualize/step render-graph/snip)
