@@ -3,6 +3,7 @@
 (require
   "private/core-structures.rkt"
   "private/primitive-data-type.rkt"
+  "el.rkt"
   [rename-in "private/decision-problem.rkt"
              (define dp-define)]
   ; TODO(?): move this to decision-problem,
@@ -13,7 +14,7 @@
   [only-in racket/list
            (argmax lst-argmax)
            (argmin lst-argmin)]
-
+  "lib/graph-inspector.rkt"
   racket/require
   racket/require-syntax
   [prefix-in r: rosette]
@@ -82,60 +83,11 @@
 
 
 ; abstract elements with subscripts
-(provide el
-         el?
-         _1s
-         _2s
-         _3s
-         _ks
-         n_s
-         index-in
+(provide index-in
          element-of-index
          ; TODO: remove the one below after testing
          dp-set-element-index
          )
-
-(struct el-struct (subscripts) #:transparent
-   #:methods gen:custom-write
-  [(define write-proc
-     (λ (the-el port mode)  
-       (fprintf port "<~a>"
-                (string-join
-                 (for/list ([s (el-struct-subscripts the-el)])
-                   (format "~a" s))
-                 ", "))))])
-
-(define-syntax (el stx)
-  (syntax-parse stx
-    [(_ subscript0 ...+)
-     #'(el-struct (list (dp-wrap-if-raw-int subscript0) ...))]))
-
-(define (el? a-sth)
-  (el-struct? a-sth))
-
-; TODO: Add contracts to subscript accessors
-; first subscript
-(define (_1s a-el)
-  (list-ref (el-struct-subscripts a-el) 0))
-
-; second subscript
-(define (_2s a-el)
-  (list-ref (el-struct-subscripts a-el) 1))
-
-; third subscript
-(define (_3s a-el)
-  (list-ref (el-struct-subscripts a-el) 2))
-
-; k-th subscript
-(define (_ks a-el k)
-  ; TODO: require k to be a constant
-  (list-ref (el-struct-subscripts a-el) (- k 1)))
-
-; length of subscript
-(define (n_s a-el)
-  (length (el-struct-subscripts a-el)))
-
-
 
 
 ; set comprehension and constructors
@@ -715,6 +667,38 @@
 
 (define-syntax (define-forward-instance-construction stx)
   (syntax-parse stx
+    [(_ (~seq #:from s)
+        (~seq #:to t)
+        (proc-id:id inst-id:id #:gui step-id:id)
+        (~and body* ((~literal define) v:id ((~literal for/set) . parts))) ... final)
+     (with-syntax (;[s->t-construction (format-id #'s "~a->~a" #'s #'t)]
+                   [a-s-instance (format-id #'s "a-~a-instance" #'s)]
+                   #;[s->t-construction/c
+                      (format-id #'s "~a->~a-construction/c" #'s #'t)]
+                   [instance-type-info (format-id #'t "dp-instance-type-~a" #'t)]
+                   [instance-type-annotate (format-id #'s "dp-annotate-instance-type-~a" #'s)]
+                   [step-id-internal (generate-temporary #'step-id)]
+                   [gui-acc (generate-temporary #'gui-acc)])
+       #'(begin
+
+           (define (step-id-internal a-s-instance)
+             ; add type annotation to source instance argument
+             (define-syntax inst-id
+               (instance-type-annotate #'a-s-instance))
+             (define gui-acc '())
+             (define v (for/set/acc gui-acc . parts))
+             ...
+             (visualize/step gui-acc))
+
+           (define-syntax step-id
+             (func-type-info
+              (syntax-local-value #'instance-type-info)
+              (syntax-parser
+                [(_ arg0 (... ...))
+                 #'(step-id-internal arg0 (... ...))]
+                [_:id #'step-id-internal])))
+
+           (define-forward-instance-construction #:from s #:to t (proc-id inst-id) body* ... final)))]
     [(_ (~seq #:from s)
         (~seq #:to t)
         (proc-id:id inst-id:id)
