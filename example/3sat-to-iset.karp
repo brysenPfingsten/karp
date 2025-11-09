@@ -12,7 +12,7 @@
 
 (define-forward-instance-construction
   #:from 3sat #:to iset
-  (3sat->iset-v1 a-3sat-inst ;; #:gui 3sat->iset-v1/gui
+  (3sat->iset-v1 a-3sat-inst #:gui 3sat->iset-v1/gui
    )
   
   (define V (for/set {(el l i) for [l ∈ (literals-of C)]
@@ -64,7 +64,7 @@
 
 (define/3sat-instance foo ([φ (cnf ('x1 ∨ 'x2 ∨ 'x3)
                                    ((¬'x1) ∨ (¬'x2) ∨ 'x4))]))
-#;(3sat->iset-v1/gui foo)
+(3sat->iset-v1/gui foo)
 
 (check-reduction #:from 3sat #:to iset
                  3sat->iset-v1 3sat->iset->>-cert-v1 3sat->iset-<<-cert-v1)
