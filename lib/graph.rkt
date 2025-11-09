@@ -2,6 +2,7 @@
 (require
   (prefix-in r: rosette/safe)
   racket/random
+  graph
   racket/stxparam
   [except-in "../private/problem-definition-core.rkt" max min]
   [for-syntax racket/syntax
@@ -57,6 +58,7 @@
  empty-graph
  get-vertices
  get-edges
+ dp-graph->racket-graph 
 
  dp-graph-V-size=-d/kc
  dp-graph-E-size=-d/kc
@@ -188,6 +190,19 @@
                               (format "  ~a : ~a" v
                                       (dp-set (hash-ref (dp-graph-M a-graph) v))))
                             (dp-set-members->list (dp-graph-V a-graph))) "\n"))))])
+
+;; dp-graph->racket-graph: dp-graph -> unweighted directed or undirected racket graph
+(define (dp-graph->racket-graph dp-g)
+  (define (helper graph-cons add-edge)
+    (define res (graph-cons '()))
+    (for ([v (dp-set-members->list (dp-graph-V dp-g))])
+      (add-vertex! res v)
+      (for ([e (hash-keys (hash-ref (dp-graph-M dp-g) v))])
+        (add-edge res v e)))
+    res)
+  (cond
+    [(dp-graph-directed? dp-g) (helper unweighted-graph/directed add-directed-edge!)]
+    [else (helper unweighted-graph/undirected add-edge!)]))
 
 ; get the ground set (as list) of the vertices of g
 ; internal
