@@ -12,6 +12,8 @@
                   [set dp-set])
          (only-in "modified/dot.rkt" dot-positioning)
          (only-in "../el.rkt" el?)
+         (prefix-in gviz-wrap: "../gviz-wrapper/interface.rkt") 
+         (prefix-in mrlib: mrlib/image-core)
          "graph.rkt")
 
 (provide visualize visualize/step render-graph/snip)
@@ -111,32 +113,55 @@
     (define shrunk-list (take verts-and-edges (add1 n)))
     (define just-verts (filter verts? shrunk-list))
     (define just-edges (filter edges? shrunk-list))
-    (display (append just-verts just-edges))
     (define edges (foldl (lambda (s acc) (set-∪ s acc)) (dp-set) just-edges))
     (define vertices (foldl (lambda (s acc) (set-∪ s acc)) (dp-set) just-verts))
-    (create-graph vertices edges))
+    (dp-graph->racket-graph (create-graph vertices edges)))
   (define toplevel (new frame% [label title] [width 800] [height 600]))
 
-  ;; Layout: toolbar on top, canvas fills the rest
-  (define root (new vertical-panel% [parent toplevel]
-                    [stretchable-width #t] [stretchable-height #t]))
-  (define toolbar (new horizontal-panel% [parent root]
-                       [stretchable-height #f] [stretchable-width #t]))
+  (define frame
+      (new frame% [label title] [width 800] [height 600]))
 
-  (define the-graph-pb (to-graph-pb (generate-graph index)))
-  (define canvas (new editor-canvas% [parent root] [editor the-graph-pb]
-                      [style '(auto-hscroll auto-vscroll)]))
+  (define root
+    (new vertical-panel% [parent frame]
+         [stretchable-width #t] [stretchable-height #t]))
+
+  (define toolbar
+    (new horizontal-panel% [parent root]
+         [stretchable-height #f] [stretchable-width #t]))
+
+  (define current-img
+    (gviz-wrap:racket-graph->bitmap (generate-graph index)))
+
+  (define graph-canvas%
+    (class canvas%
+      (init-field [img #f])
+      (super-new)
+      (inherit get-dc)
+
+      (define/public (set-image new-img)
+        (set! img new-img)
+        (send this refresh))
+
+      (define/override (on-paint)
+        (define dc (get-dc))
+        (send dc clear)
+        (when img
+          (mrlib:render-image img dc 0 0)))))
+
+  (define canvas
+    (new graph-canvas% [parent root]
+         [img current-img]))
 
   ;; Step Button
   (new button% [parent toolbar] [label "Step"]
-       [callback (λ (_btn _evt)
-                   (set! index (add1 index))
-                   (define pb* (to-graph-pb (generate-graph index)))
-                   (send canvas set-editor pb*)
-                   )])
+       [callback
+        (λ (_btn _evt)
+          (set! index (add1 index))
+          (define img*
+            (gviz-wrap:racket-graph->bitmap (generate-graph index)))
+          (send canvas set-image img*))])
 
-  (send toplevel show #t))
-
+  (send frame show #t))
 (define (visualize a-k-graph [title "Graph"])
   (define toplevel (new frame% [label title] [width 800] [height 600]))
 
