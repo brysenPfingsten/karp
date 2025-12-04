@@ -106,17 +106,27 @@
 ;; (ListOf set(verticles) set(edges)) --> ()
 (define (visualize/step verts-and-edges [title "Graph"])
   (define index 0)
-  (define (generate-graph n)
+  ;; () -> bitmap
+  (define (next-graph!)
     ;; TODO (set? es/vs) set predicate? contract?
-    (define (edges? es) (andmap (lambda (e) (not (el? e))) (dp-set-members->list es)))
-    (define (verts? vs) (andmap el? (dp-set-members->list vs)))
-    (define shrunk-list (take verts-and-edges (add1 n)))
-    (define just-verts (filter verts? shrunk-list))
-    (define just-edges (filter edges? shrunk-list))
-    (define edges (foldl (lambda (s acc) (set-∪ s acc)) (dp-set) just-edges))
-    (define vertices (foldl (lambda (s acc) (set-∪ s acc)) (dp-set) just-verts))
-    (dp-graph->racket-graph (create-graph vertices edges)))
-  (define toplevel (new frame% [label title] [width 800] [height 600]))
+    (set! index (add1 index))
+
+    (when (>= index (length verts-and-edges))
+      (send step-button enable #f))
+
+    (define (edges? es) 
+      (andmap (lambda (e) (not (el? e))) 
+              (dp-set-members->list es)))
+    (define (verts? vs) 
+      (andmap el? (dp-set-members->list vs)))
+    (let* ([shrunk-list (take verts-and-edges index)]
+           [just-verts (filter verts? shrunk-list)]
+           [just-edges (filter edges? shrunk-list)]
+           [edges (foldl (lambda (s acc) (set-∪ s acc)) (dp-set) just-edges)]
+           [vertices (foldl (lambda (s acc) (set-∪ s acc)) (dp-set) just-verts)]
+           [racket-graph (dp-graph->racket-graph (create-graph vertices edges))]
+           [gviz-bitmap (gviz-wrap:racket-graph->bitmap racket-graph)])
+      (send canvas set-image gviz-bitmap)))
 
   (define frame
       (new frame% [label title] [width 800] [height 600]))
@@ -128,9 +138,6 @@
   (define toolbar
     (new horizontal-panel% [parent root]
          [stretchable-height #f] [stretchable-width #t]))
-
-  (define current-img
-    (gviz-wrap:racket-graph->bitmap (generate-graph index)))
 
   (define graph-canvas%
     (class canvas%
@@ -150,16 +157,13 @@
 
   (define canvas
     (new graph-canvas% [parent root]
-         [img current-img]))
+         [img (make-object bitmap% 100 100)]))
 
   ;; Step Button
-  (new button% [parent toolbar] [label "Step"]
+  (define step-button
+    (new button% [parent toolbar] [label "Step"]
        [callback
-        (λ (_btn _evt)
-          (set! index (add1 index))
-          (define img*
-            (gviz-wrap:racket-graph->bitmap (generate-graph index)))
-          (send canvas set-image img*))])
+        (λ (_btn _evt) (next-graph!))]))
 
   (send frame show #t))
 (define (visualize a-k-graph [title "Graph"])
