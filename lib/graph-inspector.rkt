@@ -109,10 +109,7 @@
   ;; () -> bitmap
   (define (next-graph!)
     ;; TODO (set? es/vs) set predicate? contract?
-    (set! index (add1 index))
 
-    (when (>= index (length verts-and-edges))
-      (send step-button enable #f))
 
     (define (edges? es) 
       (andmap (lambda (e) (not (el? e))) 
@@ -159,12 +156,51 @@
     (new graph-canvas% [parent root]
          [img (make-object bitmap% 100 100)]))
 
-  ;; Step Button
-  (define step-button
-    (new button% [parent toolbar] [label "Step"]
-       [callback
-        (λ (_btn _evt) (next-graph!))]))
+  (define (enable-and-disable-buttons!)
+    (send step-button enable #t)
+    (send back-all-the-way-button enable #t)
+    (send back-button enable #t)
+    (send step-all-the-way-button enable #t)
+    (when (= index 0)
+       (send back-button enable #f)
+       (send back-all-the-way-button enable #f))
+    (when (= index (length verts-and-edges))
+       (send step-button enable #f)
+       (send step-all-the-way-button enable #f)))
 
+  (define back-all-the-way-button
+    (new button% [parent toolbar] [label "<<"]
+       [callback
+        (λ (_btn _evt) 
+          (set! index 0)
+          (enable-and-disable-buttons!)
+          (next-graph!))]))
+
+  (define back-button
+    (new button% [parent toolbar] [label "<"]
+       [callback
+        (λ (_btn _evt) 
+          (set! index (sub1 index))
+          (enable-and-disable-buttons!)
+          (next-graph!))]))
+
+  (define step-button
+    (new button% [parent toolbar] [label ">"]
+       [callback
+        (λ (_btn _evt) 
+          (set! index (add1 index))
+          (enable-and-disable-buttons!)
+          (next-graph!))]))
+
+  (define step-all-the-way-button
+    (new button% [parent toolbar] [label ">>"]
+       [callback
+        (λ (_btn _evt) 
+          (set! index (length verts-and-edges))
+          (enable-and-disable-buttons!)
+          (next-graph!))]))
+
+  (enable-and-disable-buttons!)
   (send frame show #t))
 (define (visualize a-k-graph [title "Graph"])
   (define toplevel (new frame% [label title] [width 800] [height 600]))
