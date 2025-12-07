@@ -106,36 +106,15 @@
 
 ;; ASSUME no v-e can be both empty v and empty e
 ;; (ListOf (List (Setof Vertex) (Setof Edge))) --> ()
-(define (visualize/step v-e*)
-  (define dp-empty-set? (curry set-equal? (dp-set)))
-  (define (split-old-datatype v-e*)
-    ;;: (ListOf (U (Setof Vertex) (Setof Edge)))
-    (append*
-      (for/list ([v-e (in-list v-e*)])
-		(match v-e
-	      [(list (? dp-empty-set?) (? dp-empty-set?))
-		   (error 'visualize/step-alt "should not have collected no vertices and no edges")]
-		  [(list v (? dp-empty-set?)) (list v)]
-		  [(list (? dp-empty-set?) e) (list e)]
-          [else v-e]))))
-  (visualize/step-old (split-old-datatype v-e*)))
-
-;; (ListOf (U (Setof Vertex) (Setof Edge))) --> ()
-(define (visualize/step-old verts-and-edges [title "Graph"])
+(define (visualize/step verts-and-edges [title "Graph"])
   (define index 0) ;; () -> bitmap
 
   (define (next-graph!)
     ;; TODO (set? es/vs) set predicate? contract?
 
-
-    (define (edges? es) 
-      (andmap (lambda (e) (not (el? e))) 
-              (dp-set-members->list es)))
-    (define (verts? vs) 
-      (andmap el? (dp-set-members->list vs)))
     (let* ([shrunk-list (take verts-and-edges index)]
-           [just-verts (filter verts? shrunk-list)]
-           [just-edges (filter edges? shrunk-list)]
+           [just-verts (map first shrunk-list)]
+           [just-edges (map second shrunk-list)]
            [edges (foldl (lambda (s acc) (set-∪ s acc)) (dp-set) just-edges)]
            [vertices (foldl (lambda (s acc) (set-∪ s acc)) (dp-set) just-verts)]
            [racket-graph (dp-graph->racket-graph (create-graph vertices edges))]

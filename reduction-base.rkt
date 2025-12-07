@@ -212,7 +212,6 @@
           (for*/list ([x-in-X.x (hash-keys elem-with-index)]
                       [(~? x-in-X.ind i) (list (hash-ref elem-with-index x-in-X.x))]
                       (~? (~@ #:when pred-expr)))
-             #,@(if (syntax-e #'step?) #'(dump-curr-to-log! acc log) #'())
               ; TODO: Get (elem-res-type ...) for  (elem-expr ...)
               (let ([elem-res-type (match-let-values ([(elem-res-type _) (struct-info elem-expr)]) elem-res-type)]
                     ...)
@@ -229,6 +228,7 @@
                       elem-expr)
                    ...))
                 (add-elems-to-acc! acc new-elems)
+                #,@(if (syntax-e #'step?) #'(dump-curr-to-log! acc log) #'())
                 new-elems))))]
     [(_ acc log (elem-expr ...+) (x-in-X:element-of-a-set step?) ...+ #:if (~optional pred-elem))
      #:with ((x0-in-X0:element-of-a-set step?0) ... (xn-in-Xn:element-of-a-set step?n)) #'((x-in-X step?) ...)
@@ -238,8 +238,9 @@
            (for*/list ([xn-in-Xn.x (hash-keys el-with-index)]
                        [(~? xn-in-Xn.ind i)
                         (list (hash-ref el-with-index xn-in-Xn.x))])
-             #,@(if (syntax-e #'step?n) #'(dump-curr-to-log! acc log) #'())
-             (for/set-core/acc acc log (elem-expr ...) (x0-in-X0 step?0) ... #:if (~? pred-elem)))))]))
+             (let ([inner (for/set-core/acc acc log (elem-expr ...) (x0-in-X0 step?0) ... #:if (~? pred-elem))])
+               #,@(if (syntax-e #'step?n) #'(dump-curr-to-log! acc log) #'())
+               inner))))]))
 
 (define-syntax for/set-core
   (syntax-parser
@@ -696,7 +697,6 @@
              (define curr-change-acc (box (list (set) (set)))) ;;: (List (Setof Vertex) (Setof Edge))
              (define v (for/set/acc curr-change-acc step-log . parts))
              ...
-			 (dump-curr-to-log! curr-change-acc step-log)
              (visualize/step (unbox step-log)))
 
            (define-syntax step-id
