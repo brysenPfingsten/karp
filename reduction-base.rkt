@@ -153,53 +153,9 @@
       (list-ref (dp-set-members->list a-set) (- (dp-int-unwrap i) 1))
       (error "can not access an index expoential to the input length")))
 
-
-; old version
-(define-syntax for/set-old
-  (syntax-parser
-      [(_ {x-ind-expr (~datum for) x-in-X:element-of-a-set
-                (~optional (~seq (~datum if) pred-x-ind))})
-       #`(dp-list->set
-          (let ([el-with-index (dp-set-element-index x-in-X.X)])
-            (for*/list ([x-in-X.x (hash-keys el-with-index)]
-                        [#,(if (attribute x-in-X.ind) #'x-in-X.ind #'i)
-                         (list (hash-ref el-with-index x-in-X.x))]
-                        #:when #,(if (attribute pred-x-ind) #'pred-x-ind #'#t))
-              (let* ([x-res x-ind-expr]
-                     [x-res-type (match-let-values ([(x-res-type _) (struct-info x-res)]) x-res-type)])
-                (if x-res-type
-                    (chaperone-struct x-res
-                                      x-res-type
-                                      prop:corr x-in-X.x)
-                    x-res)))))]
-      [(_ {x-y-indx-indy-expr (~datum for) x-in-X:element-of-a-set
-                              (~datum for) y-in-Y:element-of-a-set
-                              (~optional (~seq (~datum if) pred-x-y-indx-indy))})
-       #`(dp-list->set
-          (let ([el-with-index-Y (dp-set-element-index y-in-Y.X)])
-            (apply
-             append
-             (for*/list ([y-in-Y.x (hash-keys el-with-index-Y)]
-                         [#,(if (attribute y-in-Y.ind) #'y-in-Y.ind #'i)
-                          (list (hash-ref el-with-index-Y y-in-Y.x))])
-               (let ([el-with-index-X (dp-set-element-index x-in-X.X)])
-                 (for*/list ([x-in-X.x (hash-keys el-with-index-X)]
-                             [#,(if (attribute x-in-X.ind) #'x-in-X.ind #'j)
-                              (list (hash-ref el-with-index-X x-in-X.x))]
-                             #:when #,(if (attribute pred-x-y-indx-indy)
-                                          #'pred-x-y-indx-indy
-                                          #'#t))
-                   (let* ([x-y-res x-y-indx-indy-expr]
-                          [x-y-res-type (match-let-values ([(x-y-res-type _) (struct-info x-y-res)]) x-y-res-type)])
-                     (if x-y-res-type
-                         (chaperone-struct x-y-res
-                                           x-y-res-type
-                                           prop:corr x-in-X.x)
-                         x-y-res))))))))]))
-
 (define-syntax for/set/acc
   (syntax-parser
-    [(_ acc {elem-expr (~seq , elem-expr1) ... (~seq (~datum for) (~optional #:step-each) x-in-X:element-of-a-set) ...+
+    [(_ acc log {elem-expr (~seq , elem-expr1) ... (~seq (~datum for) (~optional #:step-each) x-in-X:element-of-a-set) ...+
                    (~optional (~seq (~datum if) pred-elem))})
      #:with (x-in-X/kc ...)
      (let ([xs (syntax->list #'(x-in-X.x ...))]
@@ -218,7 +174,7 @@
                                   (dp-wrap-if-raw-int elem-expr1) ...)
                                   x-in-X/kc ...
                                   #:if (~? pred-elem)))])
-       (set! acc (append acc (list res)))
+       (set! log (append log (list res)))
        res)]))
 
 (define-syntax for/set
@@ -650,6 +606,13 @@
  define-forward-certificate-construction
  define-backward-certificate-construction)
 
+(define (dump-curr-to-log! curr-change-acc step-log)
+  (cond
+    [(empty? curr-change-acc) (void)]
+    [else
+      (set! step-log (append step-log (list curr-change-acc)))
+      (set! curr-change-acc '())]))
+
 (define-syntax (define-forward-instance-construction stx)
   (syntax-parse stx
     [(_ (~seq #:from s)
@@ -663,17 +626,19 @@
                    [instance-type-info (format-id #'t "dp-instance-type-~a" #'t)]
                    [instance-type-annotate (format-id #'s "dp-annotate-instance-type-~a" #'s)]
                    [step-id-internal (generate-temporary #'step-id)]
-                   [gui-acc (generate-temporary #'gui-acc)])
+                   [step-log (generate-temporary #'gui-acc)])
        #'(begin
 
            (define (step-id-internal a-s-instance)
              ; add type annotation to source instance argument
              (define-syntax inst-id
                (instance-type-annotate #'a-s-instance))
-             (define gui-acc '())
-             (define v (for/set/acc gui-acc . parts))
+             (define step-log '())
+             (define curr-change-acc '())
+             (define v (for/set/acc curr-change-acc step-log . parts))
              ...
-             (visualize/step gui-acc))
+			 (dump-curr-to-log! curr-change-acc step-log)
+             (visualize/step step-log))
 
            (define-syntax step-id
              (func-type-info
