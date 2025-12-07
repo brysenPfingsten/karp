@@ -155,26 +155,28 @@
 
 (define-syntax for/set/acc
   (syntax-parser
-    [(_ acc log {elem-expr (~seq , elem-expr1) ... (~seq (~datum for) (~optional #:step-each) x-in-X:element-of-a-set) ...+
+    [(_ acc log {elem-expr (~seq , elem-expr1) ... (~seq (~datum for) (~optional (~and step-kw #:step-each)) x-in-X:element-of-a-set) ...+
                    (~optional (~seq (~datum if) pred-elem))})
-     #:with (x-in-X/kc ...)
-     (let ([xs (syntax->list #'(x-in-X.x ...))]
-           [inds (syntax->list #'((~? x-in-X.ind #f) ...))]
-           [Xs (syntax->list #'(x-in-X.X ...))])
-       (for/list ([i (range 1 (+ (length Xs) 1))]
-                  [an-x xs]
-                  [an-ind inds]
-                  [an-X Xs])
-         #`[#,(if (syntax-e an-ind) #`(#,an-x #:index #,an-ind) an-x) ∈ (contracted-v/kc
-            dp-set/kc #,an-X (syntax-srcloc #'#,an-X) 'for/set
-            (list (format "the ~v~s set" #,i
-                          '#,(ordinal-numeral i))))]))
+     #:with (x-in-X/kc+step? ...)
+       (for/list ([i (in-naturals 1)]
+                  [an-x (attribute x-in-X.x)]
+                  [an-ind (attribute x-in-X.ind)]
+                  [step? (attribute step-kw)]
+                  [an-X (attribute x-in-X.X)])
+         #`([#,(if an-ind #`(#,an-x #:index #,an-ind) an-x) ∈ (contracted-v/kc
+             dp-set/kc #,an-X (syntax-srcloc #'#,an-X) 'for/set
+             (list (format "the ~v~s set" #,i
+                          '#,(ordinal-numeral i))))]
+            #'#,(and step?)))
      #`(let ([res (dp-list->set
-                    (for/set-core ((dp-wrap-if-raw-int elem-expr)
+                    (for/set-core/acc
+                                  acc
+                                  log
+                                  ((dp-wrap-if-raw-int elem-expr)
                                   (dp-wrap-if-raw-int elem-expr1) ...)
-                                  x-in-X/kc ...
+                                  x-in-X/kc+step? ...
                                   #:if (~? pred-elem)))])
-       (set! log (append log (list res)))
+       (dump-curr-to-log! acc log)
        res)]))
 
 (define-syntax for/set
@@ -199,6 +201,45 @@
                        x-in-X/kc ...
          #:if (~? pred-elem)))]))
 
+(define-syntax for/set-core/acc
+  (syntax-parser
+    [(_ acc log (elem-expr ...+) (x-in-X:element-of-a-set step?) #:if (~optional pred-expr))
+     #:with (elem-res-type ...) (generate-temporaries #'(elem-expr ...))
+     ; NOTE: ``dp-set-element-index'' already shrinked the set
+     #`(apply
+        append
+        (let ([elem-with-index (dp-set-element-index x-in-X.X)])
+          (for*/list ([x-in-X.x (hash-keys elem-with-index)]
+                      [(~? x-in-X.ind i) (list (hash-ref elem-with-index x-in-X.x))]
+                      (~? (~@ #:when pred-expr)))
+             #,@(if (syntax-e #'step?) #'(dump-curr-to-log! acc log) #'())
+              ; TODO: Get (elem-res-type ...) for  (elem-expr ...)
+              (let ([elem-res-type (match-let-values ([(elem-res-type _) (struct-info elem-expr)]) elem-res-type)]
+                    ...)
+                (define new-elems
+                  (list
+                   ; NOTE: int are now wrapped in struct.
+                   ; The condition exists because we can not chaperone base types
+                   ; the only base types remaining are Booleans
+                   ; which does not make that sense to add as elements of set
+                   (if elem-res-type
+                      (chaperone-struct elem-expr ; we know it is a struct so no need to wrap int
+                                        elem-res-type
+                                        prop:corr x-in-X.x)
+                      elem-expr)
+                   ...))
+                (add-elems-to-acc! acc new-elems)
+                new-elems))))]
+    [(_ acc log (elem-expr ...+) (x-in-X:element-of-a-set step?) ...+ #:if (~optional pred-elem))
+     #:with ((x0-in-X0:element-of-a-set step?0) ... (xn-in-Xn:element-of-a-set step?n)) #'((x-in-X step?) ...)
+     #`(apply
+        append
+        (let ([el-with-index (dp-set-element-index xn-in-Xn.X)])
+           (for*/list ([xn-in-Xn.x (hash-keys el-with-index)]
+                       [(~? xn-in-Xn.ind i)
+                        (list (hash-ref el-with-index xn-in-Xn.x))])
+             #,@(if (syntax-e #'step?n) #'(dump-curr-to-log! acc log) #'())
+             (for/set-core/acc acc log (elem-expr ...) (x0-in-X0 step?0) ... #:if (~? pred-elem)))))]))
 
 (define-syntax for/set-core
   (syntax-parser
@@ -607,11 +648,29 @@
  define-backward-certificate-construction)
 
 (define (dump-curr-to-log! curr-change-acc step-log)
-  (cond
-    [(empty? curr-change-acc) (void)]
-    [else
-      (set! step-log (append step-log (list curr-change-acc)))
-      (set! curr-change-acc '())]))
+  (match curr-change-acc
+    [(box (list (? dp-set? vs) (? dp-set? es))) #:when (and (set-equal? vs (set))
+                                                            (set-equal? es (set)))
+     (void)]
+    [(box (list (? dp-set?) (? dp-set?)))
+      (set-box! step-log (append (unbox step-log) (list (unbox curr-change-acc))))
+      (set-box! curr-change-acc (list (set) (set)))]))
+
+(define (add-elems-to-acc! acc new-elems)
+  (match-define (list verts edges) (unbox acc))
+  (define-values (verts^ edges^)
+    (for/fold ([verts verts]
+               [edges edges])
+              ([new-elem (in-list new-elems)])
+      (cond
+        [(el? new-elem)
+         (values (set-∪ (set new-elem) verts) edges)]
+        [(dp-set? new-elem)
+         (values verts (set-∪ (set new-elem) edges))]
+        [else
+         (error 'add-elems-to-acc "was expecting an edge or a vertex, got ~y")])))
+  (set-box! acc (list verts^ edges^)))
+
 
 (define-syntax (define-forward-instance-construction stx)
   (syntax-parse stx
@@ -633,12 +692,12 @@
              ; add type annotation to source instance argument
              (define-syntax inst-id
                (instance-type-annotate #'a-s-instance))
-             (define step-log '())
-             (define curr-change-acc '())
+             (define step-log (box '())) ;;: (Listof (List (Setof Vertex) (Setof Edge)))
+             (define curr-change-acc (box (list (set) (set)))) ;;: (List (Setof Vertex) (Setof Edge))
              (define v (for/set/acc curr-change-acc step-log . parts))
              ...
 			 (dump-curr-to-log! curr-change-acc step-log)
-             (visualize/step step-log))
+             (visualize/step (unbox step-log)))
 
            (define-syntax step-id
              (func-type-info

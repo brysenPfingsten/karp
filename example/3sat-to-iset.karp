@@ -15,13 +15,13 @@
   (3sat->iset-v1 a-3sat-inst #:gui 3sat->iset-v1/gui
    )
   
-  (define V (for/set {(el l i) for [l ∈ (literals-of C)]
+  (define V (for/set {(el l i) for #:step-each [l ∈ (literals-of C)]
                                for [(C #:index i) ∈ (clauses-of (φ a-3sat-inst))]}))
   
   (define E1 (for/set {((el l1 i) . -e- . (el l2 j))
               for [l1 ∈ (literals-of C1)] for [l2 ∈ (literals-of C2)]
               for [(C1 #:index i) ∈ (clauses-of (φ a-3sat-inst))]
-              for [(C2 #:index j) ∈ (clauses-of (φ a-3sat-inst))]
+              for #:step-each [(C2 #:index j) ∈ (clauses-of (φ a-3sat-inst))]
               if (literal-neg-of? l1 l2)}))
   
   (define E2 (for/set {((el (fst p) i) . -e- . (el (snd p) i))

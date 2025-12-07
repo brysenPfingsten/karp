@@ -2,10 +2,11 @@
 
 (require racket/draw
          pict
-         racket/gui
+         (except-in racket/gui set-equal?)
          (except-in mrlib/graph dot-positioning)
          framework
          (only-in "../private/core-structures.rkt"
+				  set-equal?
                   set-∪
                   dp-list->set
                   dp-set-members->list
@@ -103,10 +104,26 @@
   
   graph-pb)
 
-;; (ListOf set(verticles) set(edges)) --> ()
-(define (visualize/step verts-and-edges [title "Graph"])
-  (define index 0)
-  ;; () -> bitmap
+;; ASSUME no v-e can be both empty v and empty e
+;; (ListOf (List (Setof Vertex) (Setof Edge))) --> ()
+(define (visualize/step v-e*)
+  (define dp-empty-set? (curry set-equal? (dp-set)))
+  (define (split-old-datatype v-e*)
+    ;;: (ListOf (U (Setof Vertex) (Setof Edge)))
+    (append*
+      (for/list ([v-e (in-list v-e*)])
+		(match v-e
+	      [(list (? dp-empty-set?) (? dp-empty-set?))
+		   (error 'visualize/step-alt "should not have collected no vertices and no edges")]
+		  [(list v (? dp-empty-set?)) (list v)]
+		  [(list (? dp-empty-set?) e) (list e)]
+          [else v-e]))))
+  (visualize/step-old (split-old-datatype v-e*)))
+
+;; (ListOf (U (Setof Vertex) (Setof Edge))) --> ()
+(define (visualize/step-old verts-and-edges [title "Graph"])
+  (define index 0) ;; () -> bitmap
+
   (define (next-graph!)
     ;; TODO (set? es/vs) set predicate? contract?
 
@@ -202,6 +219,7 @@
 
   (enable-and-disable-buttons!)
   (send frame show #t))
+
 (define (visualize a-k-graph [title "Graph"])
   (define toplevel (new frame% [label title] [width 800] [height 600]))
 
