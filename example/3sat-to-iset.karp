@@ -28,7 +28,7 @@
               for [l2 ∈ (literals-of C2)]
               for [(C1 #:index i) ∈ (clauses-of (φ a-3sat-inst))]
               for [(C2 #:index j) ∈ (clauses-of (φ a-3sat-inst))]
-              if (literal-neg-of? l1 l2)}))
+              if (and (> i j) (literal-neg-of? l1 l2))}))
   
 
   (create-iset-instance ([G (create-graph V (set-∪ E1 E2))]
