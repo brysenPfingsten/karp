@@ -29,7 +29,6 @@
               syntax/parse
               racket/syntax])
 
-
  ; non-conflict require
 (provide union-in)
 
@@ -167,8 +166,8 @@
              dp-set/kc #,an-X (syntax-srcloc #'#,an-X) 'for/set
              (list (format "the ~v~s set" #,i
                           '#,(ordinal-numeral i))))]
-            #'#,(and step?)))
-     #`(let ([res (dp-list->set
+            #,(if (not step?) #'#f #'#t)))
+     #'(let ([res (dp-list->set
                     (for/set-core/acc
                                   acc
                                   log
@@ -203,7 +202,7 @@
 
 (define-syntax for/set-core/acc
   (syntax-parser
-    [(_ acc log (elem-expr ...+) (x-in-X:element-of-a-set step?) #:if (~optional pred-expr))
+    [(_ acc log (elem-expr ...+) (x-in-X:element-of-a-set #t) #:if (~optional pred-expr))
      #:with (elem-res-type ...) (generate-temporaries #'(elem-expr ...))
      ; NOTE: ``dp-set-element-index'' already shrinked the set
      #`(apply
@@ -228,19 +227,53 @@
                       elem-expr)
                    ...))
                 (add-elems-to-acc! acc new-elems)
-                #,@(if (syntax-e #'step?) #'(dump-curr-to-log! acc log) #'())
+                (dump-curr-to-log! acc log)
                 new-elems))))]
-    [(_ acc log (elem-expr ...+) (x-in-X:element-of-a-set step?) ...+ #:if (~optional pred-elem))
-     #:with ((x0-in-X0:element-of-a-set step?0) ... (xn-in-Xn:element-of-a-set step?n)) #'((x-in-X step?) ...)
+    [(_ acc log (elem-expr ...+) (x-in-X:element-of-a-set #f) #:if (~optional pred-expr))
+     #:with (elem-res-type ...) (generate-temporaries #'(elem-expr ...))
+     ; NOTE: ``dp-set-element-index'' already shrinked the set
      #`(apply
         append
-        (let ([el-with-index (dp-set-element-index xn-in-Xn.X)])
-           (for*/list ([xn-in-Xn.x (hash-keys el-with-index)]
-                       [(~? xn-in-Xn.ind i)
-                        (list (hash-ref el-with-index xn-in-Xn.x))])
-             (let ([inner (for/set-core/acc acc log (elem-expr ...) (x0-in-X0 step?0) ... #:if (~? pred-elem))])
-               #,@(if (syntax-e #'step?n) #'(dump-curr-to-log! acc log) #'())
-               inner))))]))
+        (let ([elem-with-index (dp-set-element-index x-in-X.X)])
+          (for*/list ([x-in-X.x (hash-keys elem-with-index)]
+                      [(~? x-in-X.ind i) (list (hash-ref elem-with-index x-in-X.x))]
+                      (~? (~@ #:when pred-expr)))
+              ; TODO: Get (elem-res-type ...) for  (elem-expr ...)
+              (let ([elem-res-type (match-let-values ([(elem-res-type _) (struct-info elem-expr)]) elem-res-type)]
+                    ...)
+                (define new-elems
+                  (list
+                   ; NOTE: int are now wrapped in struct.
+                   ; The condition exists because we can not chaperone base types
+                   ; the only base types remaining are Booleans
+                   ; which does not make that sense to add as elements of set
+                   (if elem-res-type
+                      (chaperone-struct elem-expr ; we know it is a struct so no need to wrap int
+                                        elem-res-type
+                                        prop:corr x-in-X.x)
+                      elem-expr)
+                   ...))
+                (add-elems-to-acc! acc new-elems)
+                new-elems))))]    
+[(_ acc log (elem-expr ...+) (x0-in-X0:element-of-a-set step?0) ... (xn-in-Xn:element-of-a-set #t) #:if (~optional pred-elem))
+ #'(apply
+    append
+    (let ([el-with-index (dp-set-element-index xn-in-Xn.X)])
+      (for*/list ([xn-in-Xn.x (hash-keys el-with-index)]
+                  [(~? xn-in-Xn.ind i)
+                   (list (hash-ref el-with-index xn-in-Xn.x))])
+        (let ([inner (for/set-core/acc acc log (elem-expr ...) (x0-in-X0 step?0) ... #:if (~? pred-elem))])
+          (dump-curr-to-log! acc log)
+          inner))))]
+[(_ acc log (elem-expr ...+) (x0-in-X0:element-of-a-set step?0) ... (xn-in-Xn:element-of-a-set #f) #:if (~optional pred-elem))
+ #'(apply
+    append
+    (let ([el-with-index (dp-set-element-index xn-in-Xn.X)])
+      (for*/list ([xn-in-Xn.x (hash-keys el-with-index)]
+                  [(~? xn-in-Xn.ind i)
+                   (list (hash-ref el-with-index xn-in-Xn.x))])
+        (let ([inner (for/set-core/acc acc log (elem-expr ...) (x0-in-X0 step?0) ... #:if (~? pred-elem))])
+          inner))))]))
 
 (define-syntax for/set-core
   (syntax-parser
