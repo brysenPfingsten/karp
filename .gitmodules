@@ -1,0 +1,3 @@
+[submodule "karp-programs"]
+	path = karp-programs
+	url = https://github.com/brysenPfingsten/karp-programs.git
