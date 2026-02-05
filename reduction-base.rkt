@@ -175,6 +175,9 @@
                                   (dp-wrap-if-raw-int elem-expr1) ...)
                                   x-in-X/kc+step? ...
                                   #:if (~? pred-elem)))])
+       ;; TODO: What if you don't want to have to step through
+       ;; If you get rid of the next line, it will skip but not to a natural point
+       ;; Consider dumping before if you don't have a step-each in there? Something like that
        (dump-curr-to-log! acc log)
        res)]))
 
