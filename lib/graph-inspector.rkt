@@ -117,7 +117,8 @@
            [just-edges (map second shrunk-list)]
            [edges (foldl (lambda (s acc) (set-∪ s acc)) (dp-set) just-edges)]
            [vertices (foldl (lambda (s acc) (set-∪ s acc)) (dp-set) just-verts)]
-           [racket-graph (dp-graph->racket-graph (create-graph vertices edges))]
+           ;; TODO: How can we know if it is directed?
+           [racket-graph (dp-graph->racket-graph (create-graph vertices edges #:directed? true))]
            [gviz-bitmap (gviz-wrap:racket-graph->bitmap racket-graph)])
       (send canvas set-image gviz-bitmap)))
 
