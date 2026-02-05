@@ -671,10 +671,10 @@
       (cond
         [(el? new-elem)
          (values (set-∪ (set new-elem) verts) edges)]
-        [(dp-set? new-elem)
+        ;; TODO: Proper vertex? predicate
+        [(not (el? new-elem)) #;(dp-set? new-elem)
          (values verts (set-∪ (set new-elem) edges))]
-        [else
-         (error 'add-elems-to-acc "was expecting an edge or a vertex, got ~y")])))
+        [else (error 'add-elems-to-acc "was expecting an edge or a vertex, got ~a" new-elem)])))
   (set-box! acc (list verts^ edges^)))
 
 
