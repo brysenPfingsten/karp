@@ -444,10 +444,12 @@
 ;; Purpose: writes graph to the specified file using the official graphviz function
 (define (racket-graph->dot graph save-dir filename)
   (define dot-path (build-path save-dir (format "~a.dot" filename)))
+  (define-edge-property graph uniq #:for-each (gensym))
   (call-with-output-file dot-path
     #:exists 'replace
     (lambda (out)
       (displayln (graphviz graph) out)))
+      ;; (displayln (graphviz graph #:edge-attributes (list (list 'uniq uniq)))) out))
   dot-path)
 
 ;; racket-graph->bitmap: graph optional(string) optional(string) optional(boolean) -> image
