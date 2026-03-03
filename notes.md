@@ -5,16 +5,19 @@ We're not eating clauses. Highlight the clause as the clique is being formed the
 2 Choices
 1. Draw whole graph white then make them black as they appear
 2. Draw whole graph, remember coordinates, use those coordinates when they appear
+New Idea
+- Have the user declare more information about the data structure in the problem definition
+  - E.g., define the gadgets in the problem definition and annotate them as being added in the reduction
 
-# For/pairs (duplicate and not duplicate)
-Something like
-```racket
-for/pairs [(C1 #:index i) (C2 #:index j) ∈ (clauses-of (φ a-3sat-inst))]
-```
+# Draw two-way directed edges as two lines
+Graphviz issue
+1. Hack the graphviz function with differing attributes
+2. Roll our own graph -> dot function
 
-which expands to 
-```racket
-  for [(C1 #:index i) ∈ (clauses-of (φ a-3sat-inst))]
-  for [(C2 #:index j) ∈ (clauses-of (φ a-3sat-inst))]
-  if (> i j)
-```
+# Time to start working on different types of problems
+- Mappings
+  - Subset sum
+  - Strategic Advertising
+
+# Start thinking about language abstractions
+- What were the 3 levels
