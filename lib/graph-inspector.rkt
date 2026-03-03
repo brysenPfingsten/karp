@@ -10,6 +10,7 @@
                   set-∪
                   dp-list->set
                   dp-set-members->list
+                  dp-tuple?
                   [set dp-set])
          (only-in "modified/dot.rkt" dot-positioning)
          (only-in "../el.rkt" el?)
@@ -117,8 +118,8 @@
            [just-edges (map second shrunk-list)]
            [edges (foldl (lambda (s acc) (set-∪ s acc)) (dp-set) just-edges)]
            [vertices (foldl (lambda (s acc) (set-∪ s acc)) (dp-set) just-verts)]
-           ;; TODO: How can we know if it is directed?
-           [racket-graph (dp-graph->racket-graph (create-graph vertices edges #:directed? true))]
+           [directed? (ormap dp-tuple? (dp-set-members->list edges))]
+           [racket-graph (dp-graph->racket-graph (create-graph vertices edges #:directed? directed?))]
            [gviz-bitmap (gviz-wrap:racket-graph->bitmap racket-graph)])
       (send canvas set-image gviz-bitmap)))
 
