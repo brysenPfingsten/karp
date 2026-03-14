@@ -35,25 +35,6 @@
     
  ))
 
-
-#;(define (init-step)
-  (define f (new frame%
-                 [label "Stepper"]
-                 [width 400]
-                 [height 300]))
-  (define btn (new button%
-                   [parent f]
-                   [label "Step"]))
-  (define t (new pasteboard%) )
-  (define the-content (make-object string-snip% ""))
-  (define ec (new editor-canvas% [parent f] [editor t]))
-  (send t insert the-content)
-  (send f show #t)
-  f)
-
-#;(define (stepping f text cont)
-  )
-
 (define (init-step)
   (define f (new stepping-frame%
                  [label "Stepper"]

@@ -98,7 +98,6 @@
          argmin
          arg-kth-max
          arg-kth-min
-         find-all
          all-pairs-in
          all-triplets-in
          corr
@@ -284,27 +283,6 @@
                         (list (hash-ref el-with-index xn-in-Xn.x))])
              (for/set-core (elem-expr ...) x0-in-X0 ... #:if (~? pred-elem)))))]))
 
-; TODO: fix the following issue:
-; for [j ∈ (ints-from-to 0 i)] for [(v #:index i) ∈ Vars])
-#;(define-syntax define/sets
-  (syntax-parser
-    [(_ (set-id0:id ...) ({el-expr0 (~seq , el-expr1) ...} ...) (~seq (~datum for) xn-in-Xn:element-of-a-set) ...+
-        (~optional (~seq (~datum if) pred-expr)))
-     #:with (elem-with-index0 ...) (generate-temporaries #'(xn-in-Xn ...))
-     #:fail-unless (equal? (length (syntax->list #'(set-id0 ...)))
-                           (length (syntax->list #'(el-expr0 ...))))
-     "number of representative elements does not match the number of sets"
-     #`(define-values (set-id0 ...)
-         (let ([elem-with-index0 (dp-set-element-index xn-in-Xn.X)] ...)
-           (for*/lists (set-id0 ... #:result (values (dp-list->set (apply append set-id0)) ...))
-                       ((~@
-                         [xn-in-Xn.x (hash-keys elem-with-index0)]
-                         ; NOTE: ``xn-in-Xn.indx'' returns an uninterned ``i'' when ``ind'' undefined
-                         [xn-in-Xn.indx (list (hash-ref elem-with-index0 xn-in-Xn.x))])
-                         ...
-                        #:when #,(if (attribute pred-expr) #'pred-expr #'#t))
-             (values (list el-expr0 el-expr1 ...) ...))))]))
-
 (define-syntax define/sets
   (syntax-parser
     [(_ (set-id0:id ...+) ({el-expr0 (~seq , el-expr) ...} ...+) (~seq (~datum for) xn-in-Xn:element-of-a-set) ...+
@@ -330,48 +308,6 @@
                  ...)
               xn-in-Xn/kc ... #:if (~? pred-expr)))) ...)]))
 
-
-#;(define-syntax for/set
-  (syntax-parser
-    [(_ (~optional (~seq #:element-type el-type)) [x-expr (~datum for) x-in-X:element-of-a-set
-                (~optional (~seq (~datum if) pred-x))])
-     #`(dp-list->set
-        (map
-         (λ (x-in-X.x)
-           (let* ([x-res #,(if (attribute el-type) #'(el-type x-expr) #'x-expr)]
-                  [x-res-type (match-let-values ([(x-res-type _) (struct-info x-res)]) x-res-type)])
-             (displayln x-res)
-             (if x-res-type
-                 (chaperone-struct x-res
-                                   x-res-type
-                                   prop:corr x-in-X.x)
-                 x-res)))
-         #,(if (attribute pred-x)
-             #'(filter (λ (x-in-X.x) pred-x) (dp-set-members->list x-in-X.X))
-             #'(dp-set-members->list x-in-X.X))))]
-    [(_ (~optional (~seq #:element-type el-type)) [x-y-expr (~datum for) x-in-X:element-of-a-set (~datum for) y-in-Y:element-of-a-set
-                  (~optional (~seq (~datum if) pred-x-y))])
-     #`(dp-list->set
-        (apply
-         append ; flatten once
-         (map
-          (λ (y-in-Y.x)
-            (map
-             (λ (x-in-X.x)
-               (let* ([x-y-res #,(if (attribute el-type) #'(el-type x-y-expr) #'x-y-expr)]
-                      [x-y-res-type (match-let-values ([(x-y-res-type _) (struct-info x-y-res)]) x-y-res-type)])
-                 (if x-y-res-type
-                     (chaperone-struct x-y-res
-                                   x-y-res-type
-                                   prop:corr x-in-X.x)
-                     x-y-res)))
-             #,(if (attribute pred-x-y)
-                   #'(filter (λ (x-in-X.x) pred-x-y) (dp-set-members->list x-in-X.X))
-                   #'(dp-set-members->list x-in-X.X))))
-          (dp-set-members->list y-in-Y.X))))]
-    #;[(_ [xs-expr (~datum for) [(x:id ...) (~or in ∈) X:expr]
-                 (~optional (~seq (~datum if) pred-x))])
-     #''()]))
 
 (define-syntax all-pairs-in
   (syntax-parser
@@ -539,96 +475,6 @@
                cur-min
                (rec (- n 1)
                  (set-∪ min-xs (set cur-min))))))]))
-
-; Begin -- old version
-#;(define-syntax foreach/set  
-  (syntax-parser
-    #:datum-literals (in)
-    [(_ ([x in X] ...) body)
-     #'(make-immutable-hash
-        (map
-         (λ (e) (cons e #t))
-         (filter
-          identity
-          (apply append ; flatten once
-              (for/list ([x X] ...)
-                body)))))
-     ]))
-
-#;(define-syntax find-one
-  (syntax-parser
-    #:datum-literals (in as s.t.)
-    [(_ [x:id in X] (~optional (~seq as as-body)) s.t. pred?)
-     (if (attribute as-body)
-         ; return singleton list
-         #'(list (r:let ([the-one (r:findf (r:λ (x) pred?) X)])
-                  (r:if the-one
-                        (r:λ (x) as-body)
-                        the-one)) )
-         #'(list (r:findf (r:λ (x) pred?) X)))]))
-
-; not in use, use for/set instead
-(define-syntax find-all
-  (syntax-parser
-    #:datum-literals (in as s.t.)
-    [(_ [x:id in X] (~optional (~seq as as-body)) s.t. pred?)
-     #:with filtered #'(r:filter (r:λ (x) pred?) X)
-     ; FIXME: not unified with find-one
-     (if (attribute as-body)
-         #'(make-immutable-hash
-            (map
-             (λ (e) (cons e #t))
-
-             (r:let ([alls filtered])
-                  (r:map
-                   (r:λ (x) as-body)
-                   alls))
-         
-         ))
-         #'(make-immutable-hash
-            (map
-             (λ (e) (cons e #t))
-
-             filtered
-
-             ))
-         )]
-    [(_ [(x:id ...) in X] (~optional (~seq as as-body)) s.t. pred?)
-     #:with filtered #'(r:filter
-                        (r:λ
-                         (a-lst)
-                         (match-let ([(list x ...) a-lst])
-                           pred?))
-                        X)
-     (if (attribute as-body)
-         #'(make-immutable-hash
-        (map
-         (λ (e) (cons e #t))
-
-         (r:let ([alls
-                    filtered])
-                  (r:map
-                   (r:λ (a-lst)
-                        (match-let ([(list x ...) a-lst])
-                          as-body))
-                   alls))
-         
-         ))
-         #'(make-immutable-hash
-            (map
-             (λ (e) (cons e #t))
-
-             filtered
-
-             ))
-         )]))
-
-#;(define (all-pairs-in X)
-  (cond [(hash? X) (combinations
-                    (filter (λ (x)
-                              (hash-ref X x))
-                            (hash-keys X)) 2)]
-        [(list? X) (combinations X 2)]))
 
 ; range constructors
 (define/contract/kc (ints-from-to from to)

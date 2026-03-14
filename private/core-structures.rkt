@@ -108,38 +108,6 @@
 )
 
 
-
-; ---- discarded currently, maybe switch to this design in the future ----
-; element
-; struct wrapping something, mainly symbol, as id.
-; e.g. a number in 2-partition, a vertex of graph, a item in knapsack, etc.
-; wrapping a raw symbol enables attaching chaperone properties,
-; values, i.e., the value of the number,
-;               the weight of the vertex,
-;               the value and weight of the item,
-; are attached in the chaperone properties
-; id : any/c
-;
-
-#;(define-values (el-attr has-attr? get-attr)
-    (make-impersonator-property 'attr))
-
-#;(r:struct dp-element (id)
-          #:methods gen:custom-write
-          [(define write-proc
-             (r:λ (the-el port mode)
-                  (fprintf port "[id:~a, ~a]"
-                           (el-id the-el)
-                           (let ([the-attr (get-attr the-el)])
-                             (string-join
-                              (for/list ([(k v) (in-hash the-attr)])
-                                (format "~a:~a" k v))
-                              ", ")))))])
-; ------- end of discarded ------
-; ------------------------------------
-
-
-
 ;
 ; set operations
 ;
@@ -162,12 +130,6 @@
 ; a-sol : r:solution? 
 ; the-sym-set : (), assumed to be consistent with the solution
 ; old version, only works on sets every hash value of which is a single (symbolic or concrete) constant
-#;(define (dp-set-from-sol the-sym-set a-sol)
-  (if (r:unsat? a-sol) dp-null-set
-      (let ([sym-set-hash (dp-set-S the-sym-set)])
-      (dp-set (for/hash ([v (hash-keys sym-set-hash)])
-                (values v (hash-ref (r:model a-sol)
-                                    (hash-ref sym-set-hash v) #f)))))))
 (define (dp-set-from-sol the-sym-set a-sol)
   (if (r:unsat? a-sol) dp-null-set
       (let* ([sym-set-hash (dp-set-S the-sym-set)]
@@ -298,15 +260,6 @@
    (interfaced-struct? v)
    (assoc 'set (get-interface v)))
   "expects a value interpretable as a set")
-
-#;(define (dp-set/kc v the-srcloc name context [predicate? #f])
-  (if (and
-       (interfaced-struct? v)
-       (assoc 'set (get-interface v)))
-      v
-      (contract-fail/kc
-       the-srcloc name "can not be interpreted as a set"
-       context v predicate?)))
 
 ; contract combinator for set-like with members satisfying given contract, internal
 ; Note: flat version, membering element contracts are also flat
@@ -459,17 +412,6 @@
 ; convert set-like to set, raise error otherwise
 ; an-object : any/c
 ; -> dp-set?
-#;(define (as-set an-object)
-  (r:if (r:and
-         (interfaced-struct? an-object)
-         (r:assoc 'set (get-interface an-object)))
-        ((r:cdr (r:assoc 'set (get-interface an-object))) an-object)
-        (error "can not be used as a set:" an-object)))
-
-; internal, should not protect
-#;(define/k-contract (as-set an-object)
-  (->k [x dp-set/kc] any/kc)
-  ((r:cdr (r:assoc 'set (get-interface an-object))) an-object))
 (define (as-set an-object)
   ((r:cdr (r:assoc 'set (get-interface an-object))) an-object))
 
@@ -496,26 +438,6 @@
                       e) #t))
             elements))))
 
-; FIXME
-#;(define (make-set a-set el-type)
-  (let ([the-set (as-set a-set)])
-    (make-immutable-hash
-     (r:map
-      (r:λ (e) (r:cons (struct el-type e) #t))
-      (hash-keys (dp-set-S the-set))))))
-
-
-; begin
-; for debugging
-#;(begin-for-syntax
-  (define-match-expander testB
-    (syntax-parser
-      [_ #'1])
-    (syntax-parser
-      [_ #'1])))
-#;(define-syntax test1
-  (tBool))
-; end of debugging
 
 ; check if a-element is a member of a-set
 ; a-element : any/c
@@ -565,11 +487,6 @@
                                                    #'arg1)])]
       [_ (λ (stx) (raise-syntax-error #f "expect 2 arguments" stx))])))
 
-; concrete versions, unsafe when a-element contains symbolic value
-#;(define (set-∈ a-element a-set)
-  (hash-ref (dp-set-S (as-set a-set)) (dp-wrap-if-raw-int a-element) #f))
-#;(define (set-∉ a-element a-set)
-  (r:not (set-∈ a-element a-set)))
 (define/contract/kc (set-∈ a-element a-set)
   (->k ([x any/kc] [y dp-set/kc]) any/kc)
   (hash-ref (dp-set-S (as-set a-set)) (dp-wrap-if-raw-int a-element) #f))
@@ -590,16 +507,6 @@
   (∀ [v ∈ (as-set a-set)]
      (r:not
       (dp-equal? a-element v))))
-; fallback to safe version only when a-element is symbolic
-; not in use
-#;(define (set-∈ a-element a-set)
-  (if (dp-symbolic? a-element)
-      (set-∈-safe a-element a-set)
-      (set-∈-con a-element a-set)))
-#;(define (set-∉ a-element a-set)
-  (if (dp-symbolic? a-element)
-      (set-∉-safe a-element a-set)
-      (set-∉-con a-element a-set)))
 
 ; convert Racket list to a hash with each key maps to #t, internal
 ; -> (hash/c any/c boolean? ....)
@@ -849,20 +756,6 @@
         (r:list (r:λ (a-set)
                      (dp-equal? (set-size a-set) size))))
        '())))
-
-; null set
-; used to represent no solution
-#;(define dp-null-set (dp-set #f))
-
-; get the solved set from the rosette solution
-; a-sol : r:solution? 
-; the-sym-set : (), assumed to be consistent with the solution
-#;(define (dp-set-from-sol the-sym-set a-sol)
-  (if (r:unsat? a-sol) dp-null-set
-      (let ([sym-set-hash (dp-set-S the-sym-set)])
-      (dp-set (for/hash ([v (hash-keys sym-set-hash)])
-                (values v (hash-ref (r:model a-sol)
-                                    (hash-ref sym-set-hash v) #f)))))))
 
 
 ;
@@ -1617,11 +1510,6 @@
          (r:findf (r:λ (k) (hash-ref the-hash k #f))
                   (hash-keys the-hash))))
 
-#;(define (dp-element-from-sol the-sym-element a-sol)
-  (if (r:unsat? a-sol)
-      dp-null-set
-      (dp-extract-singleton (dp-set-from-sol the-sym-element a-sol))))
-
 ; recursively create a symbolic union of elements from a set, internal
 ; Note: At the initial call, ``k-lst'' should be ``(hash-keys H-set)''
 ; H-set : (hash/c any/c boolean/c) -- The underlying hash of the set to extract elements
@@ -1647,24 +1535,6 @@
                       #f)])
      (values (merge-func (dp-symbolic-el H (hash-keys H)) rep-el)
              cstr-lst))))
-
-#;(define (dp-symbolic-element-of a-set)
-  (let-values ([(sym-set cstrs) (dp-symbolic-subset a-set 1)])
-    (values (dp-extract-singleton sym-set)
-            ; Note: no need to maintain the cardinality constraint
-            ;       for the set, as we are always getting the first
-            ;       element in the set and the rest is ignored
-            ;       in the solution the first element in the set
-            ;       will be the first one satisfying the constraints
-            ;       of the problem
-            (append
-             #;(andmap
-             (λ (a-cstr-on-set)
-               (λ (a-el)
-                 (a-cstr-on-set sym-set)))
-             cstrs)
-            ; ensure some element is selected, not getting false
-            (list (r:λ (a-el) a-el))))))
 
 (define (dp-element-from-sol the-sym-element a-sol)
   (if (dp-mergeable? the-sym-element)      
@@ -1955,28 +1825,6 @@
             (dp-ground-set->list X)))
           1))]))
 
-
-#;(define-syntax (sum stx)
-  (syntax-parse stx
-    [(_ val-x (~datum for) x-in-X:element-of-a-set (~optional (~seq (~datum if) pred-x?)))
-     #`(r:let ([vals
-                 (r:map
-                  (r:λ (x-in-X.x)
-                       (r:let ([is-in-set
-                                 (r:and
-                                  (set-∈ x-in-X.x x-in-X.X)
-                                  #,(if (attribute pred-x?)
-                                        #'pred-x?
-                                        #t))])
-                              ; keep symbolic union inside struct dp-integer
-                              (let ([wrapped-val-x (dp-wrap-if-raw-int val-x)])
-                                  (dp-integer (r:if is-in-set (dp-integer-val wrapped-val-x) 0)
-                                          (r:if is-in-set (dp-integer-size wrapped-val-x) 'const)))))
-                  (dp-ground-set->list x-in-X.X))])        
-               (dp-integer
-                (r:apply r:+ (r:map dp-int-unwrap vals))
-                (dp-int-lst-max-size vals)))
-]))
 
 (define-syntax (sum stx)
   (syntax-parse stx

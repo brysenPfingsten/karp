@@ -25,19 +25,6 @@
 
 ; following syntax-property
 (begin-for-syntax
-
-  ; why this does not work
-  #;(define-syntax dp-type-info
-    (syntax-parser
-      [(_ (~seq key:id value) ...+)
-       #:with ks #'(key ...)
-       #:with vs #'(value ...)
-       #`(make-immutable-hash
-          '#,(for*/list
-                 ([k (syntax->list #'ks)]
-                  [v (syntax->list #'vs)])
-               (cons (syntax->datum k) v)))]))
-
   ; like hash but use id as key name directly
   (define-syntax dp-stx-info
     (syntax-parser
@@ -60,21 +47,6 @@
           x
           (hash-ref x '#,(syntax->datum #'field) undef-ret)
           undef-ret)]))
-
-  #;(define-syntax dp-stx-type-info
-    (syntax-parser
-      [(_ base-stx (~seq key:id value) ...+)
-       #:with kvs #'((key value) ...)
-       #`(syntax-property
-          base-stx
-          'type-info
-          (hash
-           #,@(flatten
-               (map
-                (λ (x) (cons #`'#,(syntax->datum
-                                 (car (syntax->list x)))
-                             (cdr (syntax->list x))))
-                (syntax->list #'kvs)))))]))
 
   ; usage
   ; create stx-obj w/ field (dp-stx-type-info stx k0 v0 k1 v1 ...)
@@ -159,15 +131,6 @@
            field
            undef-ret)]))
 
-    #;(define-syntax dp-stx-type-info-accessor-ref
-      (syntax-parser
-        [(_ x key)
-         #'(assoc
-            key
-            (dp-stx-type-info-field
-             x
-             accessors))]))
-
     (define (dp-stx-type-info-accessor-ref x key)
       (let ([the-assoc
              (dp-stx-type-info-field
@@ -182,15 +145,6 @@
                   (cdr v)
                   'undefined))
             'undefined)))
-    
-    #;(define-syntax dp-stx-type-desc-accessor-ref
-      (syntax-parser
-        [(_ x key)
-         #'(assoc
-            key
-            (dp-stx-type-desc-field
-             x
-             accessors))]))
 
     (define (dp-stx-type-desc-accessor-ref x key)
       (let ([the-assoc
@@ -207,16 +161,6 @@
                   'undefined))
             'undefined)))
 
-    #;(define-syntax dp-stx-type-info-data-ref
-      (syntax-parser
-        [(_ x key)
-         #'(assoc
-            key
-            (dp-stx-type-info-field
-             x
-             type-data))]))
-
-
     (define (dp-stx-type-info-data-ref x key)
       (let ([the-assoc
              (dp-stx-type-info-field
@@ -232,15 +176,6 @@
                   'undefined))
             'undefined)))
 
-    #;(define-syntax dp-stx-type-desc-data-ref
-      (syntax-parser
-        [(_ x key)
-         #'(assoc
-            key
-            (dp-stx-type-desc-field
-             x
-             type-data))]))
-
     (define (dp-stx-type-desc-data-ref x key)
       (let ([the-assoc
              (dp-stx-type-desc-field
@@ -255,22 +190,4 @@
                   (cdr v)
                   'undefined))
             'undefined)))
-
 )
-
-
-#;(define-syntax test-type
-  (syntax-parser
-    [(_ k:id v) (dp-stx-type-info #'2 k (+ 1 2) gt (string-append "abc" "def"))]))
-
-#;(define-syntax test-inspector
-  (syntax-parser
-    [(_ t k:id)
-     #`#,(dp-stx-type-info-field
-          (local-expand #'t 'expression #f) gt)]))
-
-#;(test-inspector (test-type a 1) a)
-
-#;(pretty-print
- (dp-type-info-field
-  (dp-type-info a 1 b 2) c))

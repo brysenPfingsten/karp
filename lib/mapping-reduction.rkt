@@ -14,39 +14,6 @@
          defined?
          (all-from-out "mapping.rkt"))
 
-; mapping constructor
-#;(define-syntax mapping
-  (syntax-parser
-    #;[(_ #:from dom [(~or x:id (x:id #:index ind:id)) (~datum ~>) x-expr])
-     #`(let ([elem-with-index (dp-set-element-index dom)])
-         (dp-mapping
-          (for*/hash ([x (hash-keys elem-with-index)]
-                      [#,(if (attribute ind) #'ind #'i)
-                       (hash-ref elem-with-index x)])
-            (values x x-expr))))]
-    [(_ [x (~or (~datum in) (~datum ∈)) X] (~optional (~seq (~datum where) pred-x)) (~datum ~>) x-expr)
-     #`(let ([elem-with-index (dp-set-element-index X)])
-         (let-values ([(H defined)
-                       (for*/fold ([curr-H (hash)] ; 
-                                   [defined (for/hash ([k (hash-keys elem-with-index)]) (values k #f))])
-                                  ([x (hash-keys elem-with-index)]
-                                   ; Question: we actually want a ``let'', simpler way?
-                                   [curr-M (list (dp-mapping curr-H defined))]
-                                   #:when (~?
-                                           (syntax-parameterize
-                                              ([curr (make-rename-transformer #'curr-M)])
-                                             pred-x)
-                                           #t))
-                         (values (syntax-parameterize ([curr (make-rename-transformer #'curr-M)])
-                                   (hash-set curr-H x x-expr))
-                                 (hash-set defined x #t)))])
-           (dp-mapping
-            H
-            #,(if (attribute pred-x)
-                  #'defined
-                  #'#f)))
-         )]
-    [(_ sth ...) #'(m-mapping sth ...)]))
 
 (define (defined? a-mapping k)
   (hash-ref (dp-mapping-defined a-mapping) k #f))
@@ -80,7 +47,7 @@
                   ; clear the temporary state for whether a key is defined
                   #f)
                #'(build-mapping-core res-H res-defined (x X (~? pred-x) x-expr) ...)))]))
-;
+
 ; For elements appears in multiple sets, later will override the former
 ; See mapping-reduction-test.rkt for examples
 (define-syntax mapping
@@ -99,11 +66,3 @@
         (for/hash ([k (dp-set-members->list (set-∪ X/kc ...))]) (values k #f)) ; init curr-defined to indicate nothing is defined
         (x X/kc (~? pred-x) x-expr) ...)]
     [(_ sth ...) #'(m-mapping sth ...)]))
-
-; simple testing
-#;(mapping [x ∈ (set 0 1 2 3 4 5)] where (and (dp-int-gt x 0)
-                                            (not (defined? curr (dp-int-minus x 1))))
-           ~> (dp-int-mult 2 x))
-
-#;(mapping [x ∈ (set 0 1 2 3)] ~> (dp-int-mult 2 x)
-         [x ∈ (set 3 4 5)] ~> (dp-int-mult 3 x))

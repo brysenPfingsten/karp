@@ -76,12 +76,6 @@
   (define dp-part-cert-env? (make-parameter #f))
   (define dp-cur-field-id (make-parameter #f))
 
-  #;(define (assert-parse-table-ref id-stx)
-    (let ([entry (free-id-table-ref (dp-parse-table) id-stx #f)])
-      (if entry
-          entry
-          (raise-syntax-error #f "undefined instance part" id-stx))))
-
   ; See decision-problem.rkt dp-parse-instance
   (define (parsed-entry-type a-entry)
     (car a-entry))
@@ -174,30 +168,12 @@
      (λ (a-stx)
        (local-expand a-stx 'expression #f))
      (stx->list parts-stx)))
-
-  ; old versions
-  #;(define-syntax (dp-expand-part stx)
-      (syntax-parse stx
-        [(_ part-stx)
-         #'(local-expand part-stx 'expression #f)]))
-  #;(define-syntax (dp-expand-parts stx)
-      (syntax-parse stx
-        [(_ parts-stx)
-         #'(map
-            (λ (a-stx)
-              (local-expand a-stx 'expression #f))
-            (stx->list parts-stx))]))
-
 )
 
 ; value-dependent contract combinator for value-independent values
 ; i.e. returns a contract accepting anything given any instance value
 (define v-dep-any/c
   (λ (a-inst) any/c))
-
-
-#;#'(begin (struct my-element ())
-         (....  (struct/c my-element)))
 
 ; dynamic generic interfaces for objects
 (define-values (prop:interface interfaced-struct? get-interface)

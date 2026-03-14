@@ -77,7 +77,6 @@
  dp-r-path-constraint
  dp-r-connected
  dp-r-st-reachable
- dp-r-st-test
  dp-r-test
  dp-r-acyclic
  dp-graph-V-ground
@@ -230,17 +229,6 @@
           (hash-keys (hash-ref (dp-graph-M g) u))))
     (hash-keys (dp-graph-M g)))))
 
-#;(define dp-graph/c
-  (and/c
-   (struct/c dp-graph
-             (hash/c
-              any/c
-              (hash/c any/c any/c #:immutable #t #:flat? #t)
-              #:immutable #t #:flat? #t)
-             dp-set/c
-             boolean?)
-   dp-graph-V-M?))
-
 (define dp-graph/kc
   (and/kc
     (make-simple-contract/kc (v)
@@ -279,12 +267,6 @@
   "invalid undirected graph: adjancency matrix is asymmetric")
 
 ; contract for undirected graph
-#;(define dp-graph-u/c
-  (and/c
-   dp-graph/c
-   dp-graph-u-invariant?
-   (λ (g) (not (dp-graph-directed? g)))))
-
 (define dp-graph-u/kc
   (and/kc
    (make-simple-contract/kc (g)
@@ -297,11 +279,6 @@
    dp-graph-u-invariant/kc))
 
 ; contract for directed graph
-#;(define dp-graph-d/c
-  (and/c
-   dp-graph/c
-   (λ (g) (dp-graph-directed? g))))
-
 (define dp-graph-d/kc
   (and/kc
    (make-simple-contract/kc (g)
@@ -335,17 +312,8 @@
     (subgraph-of? g2 g)
     (format "expects a subgraph of ~e" g)))
 
-#;(define-syntax (make-edge stx)
-  (syntax-parse stx
-    [(_ p ) #'(edge-u p)]
-    [(_ u v) #'(edge-u (r:cons u v))]))
-
 (define vertex/c any/c)
 (provide edge-u/kc edge-d/kc)
-;(define edge-u/c (struct/c edge-u (cons/c vertex/c vertex/c)))
-#;(define edge-u/c (and/c
-                  (dp-setof/c vertex/c)
-                  (λ (e) (<= (set-size e) 2))))
 (define-simple-contract/kc edge-u/kc (v)
   ((and/kc
     dp-set/kc
@@ -353,7 +321,6 @@
    v #f 'as-predicate '()
    #t) ; predicate?
   "expects an undirected edge (a set of size 2)")
-;(define edge/c (cons/c vertex/c vertex/c))
 
 (define-simple-contract/kc edge-d/kc (v)
   ((dp-duple-with-length=/kc 2)
@@ -412,16 +379,6 @@
    #f
    (hash-ref (hash-ref (dp-graph-M g) u) v #f)))
 
-; old version
-; does not match boolean?
-#;(define (has-edge? x y g)
-    (r:if
-     (r:and
-      (r:member y (hash-ref g x '()))
-      ; was undirected
-      #;(r:member x (hash-ref g y '())))
-     #t
-     #f))
 
 (define/contract/kc (remove-edge g e)
   (->k ([g dp-graph/kc]
@@ -482,45 +439,6 @@
 (kv-func-type-annotate remove-edges ((tGraph dir?) (tSetOf (tEdge dir?)) (tGraph dir?))
                        "a graph and a set of edges")
 
-; not going to work because of symbolic hash
-; (r:if
-;     (set-∈ e S)
-;     (hash-1)
-;     (hash-2))
-; will resulting symbolic hash
-#;(define (remove-edges g es)
-  (r:let*
-   ([directed (dp-graph-directed? g)]
-    [edge-e (r:if directed edge-d-e edge-u-e)])
-   (dp-graph
-    (r:foldl
-     (r:λ (e adj-M)
-          (r:if
-           (set-∈ e es)
-           (hash-set adj-M
-                     (e-u e)
-                     (hash-set
-                      (hash-ref adj-M (e-u e))
-                      (e-v e)
-                      #f))
-           adj-M))
-     #;(r:λ (e adj-M)
-          (r:if (set-∈ e es)
-                (r:let
-                 ([u (r:car (edge-e e))]
-                  [v (r:cdr (edge-e e))])
-                 (r:if directed
-                       (hash-set adj-M u (hash-set (hash-ref adj-M u) v #f))
-                       (hash-set
-                        (hash-set adj-M u (hash-set (hash-ref adj-M u) v #f))
-                        v
-                        (hash-set (hash-ref adj-M v) u #f))))
-                adj-M))
-     (dp-graph-M g)
-     (dp-ground-set->list es))
-    (dp-graph-V g)
-    directed)))
-
 (define/contract/kc (remove-vertices g vs)
   (->k ([g dp-graph/kc]
         [vs dp-set/kc])
@@ -549,52 +467,9 @@
 (kv-func-type-annotate remove-vertices ((tGraph dir?) (tSetOf (tSymbol)) (tGraph dir?))
                                        "a graph and a set of vertices")
 
-
-; only works for undirected
-; not in use any more as undirected edge is now set
-#;(r:define (edge-equal-u? edge1 edge2 recursive-equal?)
-          (r:let ([u1 (r:car (edge-u-e edge1))]
-                  [v1 (r:cdr (edge-u-e edge1))]
-                  [u2 (r:car (edge-u-e edge2))]
-                  [v2 (r:cdr (edge-u-e edge2))])
-                 (r:or (r:and
-                        (recursive-equal? u1 u2)
-                        (recursive-equal? v1 v2))
-                       (r:and
-                        (recursive-equal? u1 v2)
-                        (recursive-equal? u2 v1)))))
-; not in use any more as undirected edge is now set
-#;(r:define (edge-hash edge recursive-equal-hash)
-          (r:let ([h1 (recursive-equal-hash (edge-u-e edge))]
-                  [h2 (recursive-equal-hash (r:cons (r:cdr (edge-u-e edge))
-                                                    (r:car (edge-u-e edge))))])
-                 (r:if (r:< h1 h2) h1 h2)))
-
-;
-; Edges of undirected graphs are now sets of size 2
-; Edges of directed graphs are now tuples of length 2
-;
-
-#;(r:struct edge-u (e) #:transparent
-          #:methods gen:equal+hash [(r:define equal-proc edge-equal-u?)
-                                    (r:define hash-proc edge-hash)
-                                    (r:define hash2-proc edge-hash)]
-          #:methods gen:custom-write
-          [(define write-proc
-             (λ (the-e port mode)
-               (fprintf port "(~a -- ~a)"
-                        (car (edge-u-e the-e))
-                        (cdr (edge-u-e the-e)))))])
-
-#;(r:struct edge-d (e) #:transparent)
-
-#;(define (-e- u v)
-  (edge-u (r:cons u v)))
 (define (-e- u v)
   (set u v))
 
-#;(define (-e-> u v)
-  (edge-d (r:cons u v)))
 (define (-e-> u v)
   (tpl u v))
 
@@ -677,11 +552,6 @@
                                           (map get-τb type-lst)) stx))])))
 
 
-
-#;(define (incident? e v)
-    (r:or (r:equal? (r:car e) v)
-          (r:equal? (r:cdr e) v)))
-
 (provide incident?-typed-rewriter)
 ; TODO: eliminate the dynamic ``edge-u?'' check completely for verifier
 ;       by adding other cases
@@ -710,8 +580,6 @@
 (define (incident?-u-safe e v)
   (set-∈-safe v e))
 
-#;(define (endpoints e)
-    (a-set (r:car e) (r:cdr e)))
 ; get the endpoints of e as a set
 (define/contract/kc (endpoints e)
   (->k ([e (or/kc "expects an edge" edge-u/kc edge-d/kc)])
@@ -733,30 +601,6 @@
       [_ (λ (stx)
            (raise-syntax-error #f (format "expects an edge, gets ~a"
                                           (map get-τb type-lst)) stx))])))
-
-; how to unify the contract of directed graph and the contract of undirected
-; define a function with a parameter specifying directness that returns respectively
-#;(define (graph/c #:undirected? [undirected? #f])
-    (let ([graph-aux/c
-           (hash/c vertex/c (listof vertex/c) #:immutable #t #:flat? #t)])
-      (if undirected?
-          (and/c
-           graph-aux/c
-           (λ (g)
-             (for/and ([(key values) (in-hash g)])
-               (for/and ([v values])
-                 (has-edge? key v g)))))
-          graph-aux/c)))
-
-; original definition
-#;(define graph/c
-    (and/c
-     (hash/c vertex/c (listof vertex/c) #:immutable #t #:flat? #t)
-     ; was undirected
-     #;(λ (g)
-         (for/and ([(key values) (in-hash g)])
-           (for/and ([v values])
-             (edge? key v g))))))
 
 
 ; not used in new design
@@ -853,25 +697,6 @@
                  (format "expects an vertex of the given graph:\n ~e" g))])
        any/kc)
   (set-size (neighbors g u)))
-;; get edge as pair from graph/c
-;; assume directed
-#;(define (get-edges g)
-    (r:map
-     (r:hash-keys g)))
-
-; old version, may not be solvable(?)
-#;(define (get-edges g)
-    (for*/fold ([edges (hash)]
-                #:result (dp-set edges))
-               ([l (in-list (hash->list g))]
-                [t (in-list (if (list? (cdr l))
-                                (cdr l)
-                                (list (cdr l))))])
-      (cond
-        [(hash-ref edges (cons t (car l)) #f)
-         (values edges)]
-        [else (values (hash-set edges (cons (car l) t) #t))])))
-
 
 (define/contract/kc (get-edges g)
   (->k ([g dp-graph/kc]) any/kc)
@@ -905,39 +730,6 @@
               (dp-int-unwrap n))               
       (format "expects a graph with ~e edges" (dp-int-unwrap n))))
 
-; XXX: how to keep the invariant that undirected edge can not
-;      be inserted to directed graph or vice-versa
-;      does not ensure the invariant that the endpoints in E are subset of V
-;      no error info when some e with endpoints not in V are inserted
-;      need a contract to check this
-; unsolvable
-; V : (dp-set/c any/c) set of vertices
-; E : (dp-set/c edge/c)
-#;(define (create-graph V E #:directed? [directed? #f])
-  ; XXX: turn this defensive programming into contract
-  (when (not
-         (andmap
-          (λ (e)
-            (set-subset-of? (endpoints e) V))
-          (dp-set-members->list E)))
-    (error "create-graph: some edge contain an endpoint that does not belong to the set of vertices"))
-  
-  (dp-graph
-   (let loop
-     ([M (for/hash ([u (dp-set-members->list V)])
-           (values u (make-immutable-hash)))]
-      [Es (dp-set-members->list E)])
-     (if (empty? Es)
-         M
-         (let* ([u (e-u (car Es))]
-                [v (e-v (car Es))])
-           (loop (hash-set
-                  (if directed?
-                      M
-                      (hash-set M v (hash-set (hash-ref M v) u #t)))
-                  u (hash-set (hash-ref M u) v #t)) (cdr Es)))))
-   V
-   directed?))
 
 (define-syntax (create-graph stx)
   (syntax-parse stx
@@ -997,13 +789,6 @@
 ; those appeared as endpoints in these edges
 ; unsolvable
 ; E : (dp-set/c edge/c)
-#;(define (create-graph-from-edges E #:directed? [directed? #f])
-  (create-graph (dp-list->set
-                 (apply append
-                        (map
-                         (λ (e)
-                           (dp-set-members->list (endpoints e)))
-                         (dp-set-members->list E)))) E #:directed? directed?))
 (define-syntax (create-graph-from-edges stx)
   (syntax-parse stx
     [(_ E (~optional (~seq #:directed? directed?) #:defaults ([directed? #'#f])))
@@ -1217,64 +1002,6 @@
     (dp-r-path-constraint g-V-hash g-M-hash v-order)
     )))
 
-#;(define (dp-r-test sym-g possible-start-vs v-order)
-  (r:let*
-   ([g-V-hash (dp-set-S (dp-graph-V sym-g))]
-    [g-M-hash (dp-graph-M sym-g)])
-   (r:and
-    ; exact 1 of the vertices selected is starting vertex with order index 0
-    (r:=
-     (r:count
-      (r:λ (v)
-           (r:and
-            (hash-ref g-V-hash v) ; should not need the default #f
-            (r:= (hash-ref v-order v) 0))) 
-      possible-start-vs)
-     1)
-    #;(r:=
-     (r:count
-      (r:λ (v)
-           (r:and
-            (hash-ref g-V-hash v) ; should not need the default #f
-            (r:= (hash-ref v-order v) 0))) 
-      (hash-keys g-V-hash))
-     1)
-    (r:andmap
-     (r:λ (v)
-          (r:implies
-           (r:and
-            (hash-ref g-V-hash v)
-            (r:not (r:member v possible-start-vs)))
-           (r:> (hash-ref v-order v) 0)))
-     (hash-keys g-V-hash))
-    (dp-r-path-constraint g-V-hash g-M-hash v-order)
-    )))
-
-; FIXME: remove this later
-(define (dp-r-st-test sym-g s t v-order)
-  (r:let*
-   ([g-V-hash (dp-set-S (dp-graph-V sym-g))]
-    [g-M-hash (dp-graph-M sym-g)])
-   (r:and
-    ; s must be selected in the subgraph
-    (hash-ref g-V-hash s)
-    ; t must be selected in the subgraph
-    (hash-ref g-V-hash t)
-    ; 
-    (r:= (hash-ref v-order s) 0)
-    ; no other selected vertices can be used as the starting point
-    (r:andmap
-     (r:λ (v)
-          (r:implies
-           (r:and
-            (hash-ref g-V-hash v)
-            (r:not (equal? v s))) ; intentionally fallback to racket
-           (r:> (hash-ref v-order v) 0)))
-     (hash-keys g-V-hash))
-    (dp-r-path-constraint g-V-hash g-M-hash v-order)
-    )
-   ))
-
 (define (dp-r-st-reachable sym-g s t)
   (r:let*
    ([g-V-hash (dp-set-S (dp-graph-V sym-g))]
@@ -1320,7 +1047,7 @@
 (kv-func-type-annotate reachable? ((tGraph _) (tSymbol) (tSymbol) (tBool))
                        "a graph and two vertices")
 
-;
+
 (define (dp-r-test sym-g v-order)
   (r:let*
    ([g-V-hash (dp-set-S (dp-graph-V sym-g))]
@@ -1442,30 +1169,7 @@
           ;(r:= (set-size (set-∪ (out-neighbors g t) (in-neighbors g t))) 1)
           ))]))
 (kv-func-type-annotate st-path? ((tGraph _) (tSymbol) (tSymbol) (tBool)) "a graph")
-#;(define (st-path? g s t)
-  (let ([g-V-hash (dp-set-S (dp-graph-V g))])
-    (r:and
-     ; XXX: this does not work in both verifier and solver environment
-     ;(reachable? g s t)
-     (dp-r-st-reachable g s t)
-     (r:andmap
-      (r:λ (v)
-           (r:implies
-            (hash-ref g-V-hash v)
-            (r:and (r:<= (in-degree g v)
-                         (if (dp-graph-directed? g) 1 2))
-                   (r:<= (out-degree g v)
-                         (if (dp-graph-directed? g) 1 2))))
-           ;(r:<= (set-size (set-∪ (out-neighbors g v) (in-neighbors g v))) 2)
-           )
-      (hash-keys g-V-hash))
-     (r:= (in-degree g s) (if (dp-graph-directed? g) 0 1))
-     (r:= (out-degree g s) 1)  
-     ;(r:= (set-size (set-∪ (out-neighbors g s) (in-neighbors g s))) 1)
-     (r:= (in-degree g t) 1)
-     (r:= (out-degree g t) (if (dp-graph-directed? g) 0 1))
-     ;(r:= (set-size (set-∪ (out-neighbors g t) (in-neighbors g t))) 1)
-     )))
+
 
 (define (dp-symbolic-path g s t)
   (dp-symbolic-subgraph-core g
@@ -1632,27 +1336,6 @@
                         (hash-ref v-order y)))))
 
   (values v-order tree vs))
-
-#;(module+ test
-  (require rackunit
-           racket/pretty)
-  (test-case
-   "DFS test"
-   (let* ([a-g (make-hash '((v1 v2 v3 v4 v5)
-                            (v2 v1 v4 v6)
-                            (v3 v1 v5)
-                            (v4 v1 v2 v5 v6)
-                            (v5 v1 v3 v4 v6)
-                            (v6 v2 v4 v5)
-                            (v7 v8 v9)
-                            (v8 v7)
-                            (v9 v7)))])
-     (let-values
-         ([(v-order order vs) (dp-dfs-pre a-g)])
-       (pretty-print v-order)
-       (pretty-print order)
-       (pretty-print vs)))
-   ))
 
 ; create list of vertices
 (define (vi i)

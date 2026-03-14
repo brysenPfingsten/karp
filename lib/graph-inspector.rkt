@@ -246,6 +246,3 @@
   (define the-graph-pb (to-graph-pb a-k-graph 15.0))
 
   (new graph-editor-snip% [graph-pb the-graph-pb]))
-
-
-#;(create-graph-from-edges (set ('a . -e- . 'b)))

@@ -475,32 +475,6 @@
      #`(integer #:natural (~? pv-numeric #:cardinal))]
     [_:id #'(natural)]))
 
-; old version
-#;(define-syntax (natural stx)
-  (syntax-parse stx
-    [(_)
-     (if (dp-parse-table)
-         ; same for inst and cert env
-         (dp-stx-type-desc
-          (generate-temporary #'natural)
-          type 'natural
-          kv-type-object #'(tInt)
-          atomic? #t
-          ctc #'natural/c
-          v-dep-ctc #'v-dep-any/c
-          type-data '()
-          accessors '()
-          ; Note: natural can not be used as solvable
-          ;symbolic-constructor #'(λ (a-inst) dp-symbolic-natural)
-          ;solution-decoder #'dp-natural-from-sol
-          ;null-object #'dp-null-natural
-          generator #'(λ (a-inst)
-                        (λ ()
-                          (gen-random-natural)))
-          )
-         (raise-syntax-error 'natural unsupport-outside-problem-definition-msg stx))]
-    [_:id #'(natural)]))
-
 
 ; TODO: add generate random integer
 (define-syntax (integer stx)
@@ -574,34 +548,6 @@
                                         (map get-τb arg-lst))
                                 #'(and arg ...)
                                 #'and)])])))
-#;(kv-func-type-annotate r:nand ((tBool) (tBool) (tBool)) "two booleans")
-(provide nand-typed-rewriter)
-(define-syntax nand-typed-rewriter
-  (λ (arg-lst)
-    (match arg-lst
-      [(list (cons _ (tBool)) ...)
-       (λ (stx) (cons stx (tBool)))]
-      [_ (syntax-parser
-           [(nand arg ...)
-            (raise-syntax-error #f
-                                (format "expects booleans, gets ~a"
-                                        (map get-τb arg-lst))
-                                #'(nand arg ...)
-                                #'nand)])])))
-#;(kv-func-type-annotate r:or ((tBool) (tBool) (tBool)) "two booleans")
-(provide or-typed-rewriter)
-(define-syntax or-typed-rewriter
-  (λ (arg-lst)
-    (match arg-lst
-      [(list (cons _ (tBool)) ...)
-       (λ (stx) (cons stx (tBool)))]
-      [_ (syntax-parser
-           [(or arg ...)
-            (raise-syntax-error #f
-                                (format "expects booleans, gets ~a"
-                                        (map get-τb arg-lst))
-                                #'(or arg ...)
-                                #'or)])])))
 
 (kv-func-type-annotate xor ((tBool) (tBool) (tBool)) "two booleans")
 (kv-func-type-annotate implies ((tBool) (tBool) (tBool)) "two booleans")

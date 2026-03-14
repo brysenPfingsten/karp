@@ -161,8 +161,6 @@
              (dp-set-members->list c2)))
           (dp-set-members->list c1)))
 
-;(r:struct neg (x) #:transparent)
-
 
 ;(define literal/c (or/c var/c (struct/c neg var/c)))
 ; Note: currently the order of variables counts when comparing equality 
@@ -193,8 +191,6 @@
      ((struct/c dp-cnf-clause (listof literal/c)) v)
      "internal error: invalid clause structure")))
 
-#;(define clause/c
-    (listof literal/c))
 
 ; Note the order of clauses counts when comparing equality at this time
 (r:struct dp-cnf (lst) #:transparent
@@ -227,7 +223,6 @@
   (->k ([x (dp-setof/kc clause/kc)]) any/kc)
   (dp-cnf (dp-set-members->list a-set-of-clause)))
 
-#;(define cnf/c (listof clause/c))
 
 (define/contract/kc (underlying-var a-literal)
   (->k ([x literal/kc]) any/kc)
@@ -250,10 +245,6 @@
          (r:xor (dp-literal-neg? l1) (dp-literal-neg? l2))))
 (kv-func-type-annotate literal-neg-of? ((tLiteral) (tLiteral) (tBool)) "two literal")
 
-#;(define (underlying-var a-literal)
-  (cond [(var/c a-literal) a-literal]
-        [else (neg-x a-literal)]))
-
 (define/contract/kc (same-variable? literal-1 literal-2)
   (->k ([x literal/kc] [y literal/kc]) any/kc)
   (r:equal? (underlying-var literal-1) (underlying-var literal-2)))
@@ -271,23 +262,6 @@
    (r:map
     (r:λ (l) (true-literal? l assignment))
     (dp-cnf-clause-lst a-clause))))
-
-#;(define (n-true-literals a-clause assignment)
-  (r:count
-   r:identity
-   (r:map
-    (r:λ (l) (true-literal? l assignment))
-    (clause-lst a-clause))))
-
-#;(define (n-true-literals assignment a-clause)
-  (r:count
-   r:identity
-   (r:map
-    (r:λ (l)
-         (r:if (var/c l)
-              (r:hash-ref assignment l)
-              (r:not (r:hash-ref assignment (neg-x l)))))
-    a-clause)))
 
 (define/contract/kc (clauses-of a-cnf)
   (->k ([x cnf/kc]) any/kc)
@@ -358,10 +332,6 @@
              (range (length mem-list))))))
         (error "not a cnf" a-cnf)))
 
-#;(define (literals-of a-sth)
-  (cond [(clause/c a-sth) (clause-lst a-sth)]
-        [(cnf/c a-sth) (r:flatten a-sth)]))
-
 ; get all variables of a cnf or clause as a list
 ; a-sth: (or/c clause? dp-cnf?)
 ; -> (listof var/c[?])
@@ -371,8 +341,7 @@
             (r:remove-duplicates
              (r:map underlying-var (dp-cnf-clause-lst a-sth)))]
            [(dp-cnf? a-sth)
-            (r:remove-duplicates (r:flatten (r:map vars-of-list (dp-cnf-lst a-sth))))])
-)
+            (r:remove-duplicates (r:flatten (r:map vars-of-list (dp-cnf-lst a-sth))))]))
 
 ; get all variables of a cnf or clause as a set
 ; a-sth: (or/c clause? dp-cnf?)
@@ -381,29 +350,9 @@
   (->k ([x (or/kc "expects a CNF or a clause" cnf/kc clause/kc)]) any/kc)
   (dp-list->set (vars-of-list a-sth)))
 
-#;(define (vars-of a-sth)
-  (r:cond [(clause/c a-sth)
-         (r:remove-duplicates
-          (r:map underlying-var (clause-lst a-sth)))]
-        [(cnf/c a-sth)
-         (r:remove-duplicates (r:flatten (r:map vars-of a-sth)))])
-  )
 
 ; compile-time functions to support cnf literal parsing
 (begin-for-syntax
-
-  ; Question: why this does not work
-  #;(define-syntax-class lit
-    #:datum-literals (¬)
-    (pattern (~or* ((~seq (~and ¬ neg)) x) (x))))
-  #;(define (parse-clause stx i)
-    (syntax-parse stx
-      #:datum-literals (∨)
-      [(literal0:lit (~seq ∨ literal1:lit) ...)
-       #`(clause (list (literal literal0.x #,(if (attribute literal0.neg) #t #f) #,i)
-                       (literal literal1.x #,(if (attribute literal1.neg) #t #f) #,i)
-                       ...))]))
-
   (define (parse-literal stx)
     (syntax-parse stx
       #:datum-literals (¬)
@@ -417,8 +366,7 @@
       [(literal0 (~seq ∨ literal1) ...)
        (let ([literals (map (λ (l-stx) (parse-literal l-stx))
                             (syntax->list #'(literal0 literal1 ...)))])
-       #`(dp-cnf-clause (list #,@literals)))]))
-)
+       #`(dp-cnf-clause (list #,@literals)))])))
 
 (define-syntax (clause stx)
   (syntax-parse stx
@@ -467,85 +415,6 @@
                           res-sat-instance))))]))
   
   (dp-cnf (generate-sat-instance-aux 0 n-vars '())))
-
-#;(define (generate-sat-instance
-                  n-clauses n-vars
-                  #:exact-n? [e-n? #f])
-  ; not very meaningful to have no contract here
-  ;(-> integer? integer? sat-instance/c)
-  
-  (define (generate-clause n-vars i-clause)
-
-    (define (draw-3-var n-vars)
-        (map (λ (x) (string->symbol
-                   (string-append "x" (number->string x))))
-             (random-sample
-              (stream->list (in-range 1 (+ n-vars 1)))
-              3
-              #:replacement? #f)))
-
-    (define (generate-literal-from-var var i-clause)
-      (literal var (random-ref '(#t #f)) i-clause))
-
-    (clause (map generate-literal-from-var (draw-3-var n-vars) (make-list 3 i-clause))))
- 
-  (define (generate-sat-instance-aux i n-vars res-sat-instance)
-       (cond [(eq? i n-clauses) res-sat-instance]
-             [else (let* ([a-clause (generate-clause n-vars i)]
-                          [repeated?
-                           (member a-clause res-sat-instance
-                                   (λ (x y) (andmap literal-equal? x y)))]
-                          [draw-another? (and e-n? repeated?)])
-                    (generate-sat-instance-aux
-                    (if draw-another? i (+ i 1))
-                    n-vars
-                    (if repeated?
-                        res-sat-instance
-                        (cons
-                          a-clause
-                          res-sat-instance))))]))
-  
-  (generate-sat-instance-aux 0 n-vars '()))
-
-
-#;(define (generate-sat-instance
-                  n-clauses n-vars
-                  #:exact-n? [e-n? #f])
-  ; not very meaningful to have no contract here
-  ;(-> integer? integer? sat-instance/c)
-  
-  (define (generate-clause n-vars)
-
-    (define (draw-3-var n-vars)
-        (map (λ (x) (string->symbol
-                   (string-append "x" (number->string x))))
-             (random-sample
-              (stream->list (in-range 1 (+ n-vars 1)))
-              3
-              #:replacement? #f)))
-
-    (define (generate-literal-from-var var)
-        (if (random-ref '(#t #f))
-            var
-            (neg var)))
-
-    (map generate-literal-from-var (draw-3-var n-vars)))
- 
-  (define (generate-sat-instance-aux i n-vars res-sat-instance)
-       (cond [(eq? i n-clauses) res-sat-instance]
-             [else (let* ([a-clause (generate-clause n-vars)]
-                          [repeated? (member a-clause res-sat-instance)]
-                          [draw-another? (and e-n? repeated?)])
-                    (generate-sat-instance-aux
-                    (if draw-another? i (+ i 1))
-                    n-vars
-                    (if repeated?
-                        res-sat-instance
-                        (cons
-                          a-clause
-                          res-sat-instance))))]))
-  
-  (generate-sat-instance-aux 0 n-vars '()))
 
 
 ; parsing in problem definition
