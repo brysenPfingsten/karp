@@ -1,5 +1,7 @@
 #lang racket
 
+(require syntax/parse)
+
 (provide
  (struct-out dp-tuple)
  fst
@@ -210,5 +212,59 @@
             dp-set-members->list
             rest)))))
 
-
-
+; tuple
+(define-syntax (tuple stx)
+  (if (dp-parse-table)
+      (if
+       ; only valid in inst enviroment
+       (not (dp-part-cert-env?))
+       (syntax-parse stx
+         [(_ (~seq #:field-type type-desc) ...)
+          (let* ([el-types
+                  (map
+                   (λ (a-stx) (dp-stx-type-desc a-stx))
+                   (dp-expand-parts
+                    #'(type-desc ...)))]
+                 [el-kv-type-objects
+                  (map (λ (a-type-info)
+                         (dp-stx-info-field a-type-info kv-type-object))
+                       el-types)]  
+                 [el-ctcs (map (λ (a-stx-info) (dp-stx-info-field a-stx-info ctc)) el-types)]
+                 [el-v-dep-ctcs (map (λ (a-stx-info) (dp-stx-info-field a-stx-info v-dep-ctc)) el-types)]
+                 [tuple-ctc #`(dp-tuple/kc #,@el-ctcs)]
+                 [tuple-v-dep-ctc #`(dp-tuple-d/kc #,@el-v-dep-ctcs)]
+                 ; ids in referred parts
+                 [type-desc-ids (apply append
+                                       (map
+                                        (λ (a-stx-info)
+                                          (let ([a-id (dp-stx-info-field a-stx-info referred-ids)])
+                                            (if (equal? a-id 'undefined)
+                                                '()
+                                                a-id)))
+                                        el-types))])
+            (dp-stx-type-desc (generate-temporary #'tuple)
+                              type 'tuple
+                              kv-type-object #`(tTuple #,@el-kv-type-objects)
+                              atomic? #f
+                              ctc tuple-ctc
+                              v-dep-ctc tuple-v-dep-ctc
+                              ; XXX: currently not supporting creating new element structureb
+                              #;el-type-to-make #;(apply append
+                                                     (map
+                                                      (λ (a-stx-info)
+                                                        (dp-stx-info-field a-stx-info el-type-to-make))
+                                                      el-types))
+                              type-data (list (cons 'el-types el-types))
+                              accessors '()
+                              generator #`(λ (a-inst)
+                                            (apply
+                                             dp-tuple
+                                             #,(map
+                                                (λ (el-type)
+                                                  #`((#,(dp-stx-info-field el-type generator) a-inst)))
+                                                el-types)))
+                              referred-ids type-desc-ids))])
+       (raise-syntax-error #f unsupport-in-certificate-msg stx))
+      (syntax-parse stx
+        [(_ elements ...)
+         #'(tpl (dp-wrap-if-raw-int elements) ...)])))
