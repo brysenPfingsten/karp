@@ -1,6 +1,20 @@
 #lang racket
 
-(require syntax/parse)
+(require [for-syntax racket/struct
+                     racket/syntax
+                     syntax/parse
+                     racket/function
+                     racket/match]
+         [for-meta 2 racket/base
+                   syntax/parse])
+(require [prefix-in r: rosette/safe])
+(require (only-in "./set.rkt" 
+                  dp-list->set
+                  dp-set-members->list)
+         "../../private/verifier-type.rkt"
+         "../../private/karp-contract.rkt"
+         "../../private/problem-definition-utility.rkt"
+         "../../private/primitive-data-type.rkt")
 
 (provide
  (struct-out dp-tuple)

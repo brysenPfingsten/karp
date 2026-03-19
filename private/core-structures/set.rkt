@@ -11,12 +11,12 @@
                      racket/match]
          [for-meta 2 racket/base
                    syntax/parse])
-(require "../../private/verifier-type.rkt")
 (require [prefix-in r: rosette/safe])
-(require "./dp-mergeable.rkt"
-"../../private/karp-contract.rkt"
-"../../private/problem-definition-utility.rkt"
-"../../private/primitive-data-type.rkt")
+(require "../../private/verifier-type.rkt"
+         "./dp-mergeable.rkt"
+         "../../private/karp-contract.rkt"
+         "../../private/problem-definition-utility.rkt"
+         "../../private/primitive-data-type.rkt")
 
 
 (provide
