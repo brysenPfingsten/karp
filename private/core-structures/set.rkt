@@ -20,41 +20,37 @@
 
 
 (provide
+ ; types/structs
  (r:struct-out dp-set)
  dp-set/c
-
  dp-set/kc
  dp-setof/kc
  dp-setof-d/kc
  dp-subset-of-d/kc
-
  dp-set-with-size=/kc
  dp-set-size=-d/kc
- 
+
+ ; constructors/conversions
  a-set
- set-∈
- set-∉
- set-∈-safe
- set-∉-safe
- set-∈-d/kc
+ as-set
  dp-list->hash
  dp-list->set
  dp-list-list->set
  set-ground-set
  dp-ground-set->list
  dp-set-members->list
+
+ ; membership
+ set-∈
+ set-∉
+ set-∈-safe
+ set-∉-safe
+ set-∈-d/kc
+
+ ; set relations/ops
  set-subset-of?
  set-equal?
-
  dp-set-shrink
- 
- set
- subset-of
- the-set-of
- the-product-of
- element-of
- 
- as-set
  set-∪
  set-∩
  dp-set-remove
@@ -62,18 +58,19 @@
  set-minus
  set-size
 
+ ; macros/type constructors
+ set
+ subset-of
+ the-set-of
+ the-product-of
+ element-of
+
+ ; symbolic/solver
  dp-null-set
  dp-symbolic-subset
  dp-set-from-sol
-
- dp-element-from-sol
-
- ;temp
-
  dp-symbolic-element-of
-
- dp-extract-singleton
-)
+ dp-element-from-sol)
 
 
 ;
@@ -413,47 +410,35 @@
 
 (provide set-∈-typed-rewriter
          set-∉-typed-rewriter)
+(begin-for-syntax
+  (define (make-set-membership-typed-rewriter unsafe-id safe-id)
+    (λ (type-lst)
+      (match type-lst
+        [(args-τ ('CON τb) (_ (tSetOf τb)))
+         (λ (stx) (cons stx (tBool)))]
+        [(args-τ ('SYM τb) (_ (tSetOf τb)))
+         (syntax-parser
+           [(_ arg-el arg-S)
+            (cons #`(#,safe-id arg-el arg-S) (tBool))])]
+        [(args-τ (_ τb0) (_ (tSetOf τb1)))
+         (syntax-parser
+           [(_ arg-el arg-S)
+            (raise-syntax-error #f "element type does not match the set"
+                                #`(#,unsafe-id arg-el arg-S)
+                                #'arg-el)])]
+        [(args-τ (_ _) (_ _))
+         (syntax-parser
+           [(_ arg0 arg1)
+            (raise-syntax-error #f "expects a set"
+                                #`(#,unsafe-id arg0 arg1)
+                                #'arg1)])]
+        [_ (λ (stx) (raise-syntax-error #f "expect 2 arguments" stx))]))))
+
 (define-syntax set-∈-typed-rewriter
-  (λ (type-lst)
-    (match type-lst
-      [(args-τ ('CON τb) (_ (tSetOf τb)))
-       (λ (stx) (cons stx (tBool)))]
-      [(args-τ ('SYM τb) (_ (tSetOf τb)))
-       (syntax-parser
-         [(set-∈ arg-el arg-S)
-          (cons #'(set-∈-safe arg-el arg-S) (tBool))])]
-      [(args-τ (_ τb0) (_ (tSetOf τb1)))
-       (syntax-parser
-         [(set-∈ arg-el arg-S) (raise-syntax-error #f "element type does not match the set"
-                                                   #'(set-∈ arg-el arg-S)
-                                                   #'arg-el)])]
-      [(args-τ (_ _) (_ _))
-       (syntax-parser
-         [(set-∈ arg0 arg1) (raise-syntax-error #f "expects a set"
-                                                   #'(set-∈ arg0 arg1)
-                                                   #'arg1)])]
-      [_ (λ (stx) (raise-syntax-error #f "expect 2 arguments" stx))])))
+  (make-set-membership-typed-rewriter #'set-∈ #'set-∈-safe))
 
 (define-syntax set-∉-typed-rewriter
-  (λ (type-lst)
-    (match type-lst
-      [(args-τ ('CON τb) (_ (tSetOf τb)))
-       (λ (stx) (cons stx (tBool)))]
-      [(args-τ ('SYM τb) (_ (tSetOf τb)))
-       (syntax-parser
-         [(set-∉ arg-el arg-S)
-          (cons #'(set-∉-safe arg-el arg-S) (tBool))])]
-      [(args-τ (_ τb0) (_ (tSetOf τb1)))
-       (syntax-parser
-         [(set-∉ arg-el arg-S) (raise-syntax-error #f "element type does not match the set"
-                                                   #'(set-∉ arg-el arg-S)
-                                                   #'arg-el)])]
-      [(args-τ (_ _) (_ _))
-       (syntax-parser
-         [(set-∉ arg0 arg1) (raise-syntax-error #f "expects a set"
-                                                   #'(set-∉ arg0 arg1)
-                                                   #'arg1)])]
-      [_ (λ (stx) (raise-syntax-error #f "expect 2 arguments" stx))])))
+  (make-set-membership-typed-rewriter #'set-∉ #'set-∉-safe))
 
 (define/contract/kc (set-∈ a-element a-set)
   (->k ([x any/kc] [y dp-set/kc]) any/kc)
@@ -890,21 +875,6 @@
          [_:id #'(set)])
        (raise-syntax-error #f unsupport-in-certificate-msg stx))
       (syntax-parse stx
-        ; XXX: temporary solution, probably non-solvable(?)
-        ; better use another name that is not available for individual problem definition
-        #;[(_ [x-expr (~datum for) x-in-X:element-of-a-set
-                    (~optional (~seq (~datum if) pred-x))])
-         ; the code below try to create the key of the resulting hash in the set
-         ; without adding or removing symbols. However, if the elements of the X or
-         ; x-expr are sets, which contains hash-tables, this could resulting hash symbolic hash tables
-         #`(r:map
-              (r:λ (x-in-X.x)
-                   (r:if
-                    (r:and (set-∈ x-in-X.x x-in-X.X)
-                           #,(if (attribute pred-x) #'pred-x #t))
-                    x-expr)
-                   x-in-X.x)
-              (dp-ground-set->list x-in-X.X))]
         ; set literal
         [(_ elements ...)
          #'(a-set (dp-wrap-if-raw-int elements) ...)])))
@@ -1009,30 +979,11 @@
         (let ([l (dp-set-members->list S)])
           (dp-list->set (random-sample l n #:replacement? replacement?))))))
 
-(define-syntax (dp-make-flat-contract stx)
-  (syntax-parse stx
-    [(_ () ...+)
-     #`()]))
-
 (define-syntax (subset-of stx)
   (if (dp-parse-table)     
       (syntax-parse stx
         [(_ ((~literal the-set-of) type-desc))
          #'(set #:of-type type-desc)]
-        ;-------------------------------
-        #;[(_ ((~literal the-product-of) set-desc ...+))
-         #:with (kw-ft ...) (make-list (length (stx->list #'(set-desc ...))) #'#:field-type)
-         #:with (field-type ...) (map (λ (a-stx)
-                                        (if (identifier? a-stx)
-                                            #`(element-of #,a-stx)
-                                            a-stx))
-                                      (stx->list #'(set-desc ...)))
-         #'(set #:of-type (tuple (~@ kw-ft field-type) ... ))]
-        #;[(_ ((~literal the-product-of) (~or set-name:id set-desc) ...+))
-         #:with (field-type ...) #'((~? set-desc (element-of set-name)) ...)
-         #:with (kw-ft ...) (make-list (length (stx->list #'(field-type ...))) #'#:field-type)
-         #'(set #:of-type (tuple (~@ kw-ft field-type) ... ))]
-        ;-------------------------------
         ; use the following alternative
         [(_ (~or superset-name:id setlike-value)
             (~optional (~seq #:size size)))
@@ -1200,14 +1151,6 @@
                                       (r:evaluate y a-sol)))))
             a-sol))]
         [else (r:evaluate a-sym a-sol)]))
-
-; not in use
-; extract the element from a singleton set
-; (-> dp-set/c any/c)
-(define (dp-extract-singleton a-set)
-  (r:let ([the-hash (dp-set-S a-set)])
-         (r:findf (r:λ (k) (hash-ref the-hash k #f))
-                  (hash-keys the-hash))))
 
 ; recursively create a symbolic union of elements from a set, internal
 ; Note: At the initial call, ``k-lst'' should be ``(hash-keys H-set)''
