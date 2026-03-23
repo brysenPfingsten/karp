@@ -1340,89 +1340,55 @@
 ; Note: for x-in-X:element-of-a-set, we know that x-in-X.x is always concrete
 ;
 
+(begin-for-syntax
+  (define (quantifier-body who map-op guard-op stx)
+    (syntax-parse stx
+      [(_ x-in-X:element-of-a-set expr)
+       #`(let ([X (contracted-v/kc
+                   dp-set/kc
+                   x-in-X.X
+                   #,(syntax-srcloc #'x-in-X.X)
+                   '#,who
+                   (list "the value quantified over"))])
+           (#,map-op
+            (r:λ (x-in-X.x)
+                 (#,guard-op
+                  (set-∈ x-in-X.x X)
+                  expr))
+            (dp-ground-set->list X)))]
+
+      [(_ x-y-in-X-Y:element-of-product-of-2-sets x1-x2-expr)
+       #`(let ([X (contracted-v/kc
+                   dp-set/kc
+                   x-y-in-X-Y.X
+                   #,(syntax-srcloc #'x-y-in-X-Y.X)
+                   '#,who
+                   (list "the value quantified over"))]
+               [Y (contracted-v/kc
+                   dp-set/kc
+                   x-y-in-X-Y.Y
+                   #,(syntax-srcloc #'x-y-in-X-Y.Y)
+                   '#,who
+                   (list "the value quantified over"))])
+           (#,map-op
+            (r:λ (x-y-in-X-Y.x)
+                 (#,guard-op
+                  (set-∈ x-y-in-X-Y.x X)
+                  (#,map-op
+                   (r:λ (x-y-in-X-Y.y)
+                        (#,guard-op
+                         (r:and
+                          (set-∈ x-y-in-X-Y.y Y)
+                          x-y-in-X-Y.x-y-pred?)
+                         x1-x2-expr))
+                   (dp-ground-set->list Y))))
+            (dp-ground-set->list X)))])))
+
 (define-syntax (∀ stx)
-  (syntax-parse stx
-    [(_ x-in-X:element-of-a-set expr)
-     #`(let ([X (contracted-v/kc
-                 dp-set/kc
-                 x-in-X.X
-                 #,(syntax-srcloc #'x-in-X.X)
-                 '∀
-                 (list "the value quantified over"))])
-         (r:andmap
-          (r:λ (x-in-X.x)
-               (r:implies
-                (set-∈ x-in-X.x X)
-                expr))
-          (dp-ground-set->list X)))]
-    [(_ x-y-in-X-Y:element-of-product-of-2-sets x1-x2-expr)
-     #`(let ([X (contracted-v/kc
-                 dp-set/kc
-                 x-y-in-X-Y.X
-                 #,(syntax-srcloc #'x-y-in-X-Y.X)
-                 '∀
-                 (list "the value quantified over"))]
-             [Y (contracted-v/kc
-                 dp-set/kc
-                 x-y-in-X-Y.Y
-                 #,(syntax-srcloc #'x-y-in-X-Y.Y)
-                 '∀
-                 (list "the value quantified over"))])
-         (r:andmap
-          (r:λ (x-y-in-X-Y.x)
-               (r:implies
-                (set-∈ x-y-in-X-Y.x X)
-                (r:andmap
-                 (r:λ (x-y-in-X-Y.y)
-                      (r:implies
-                       (r:and
-                        (set-∈ x-y-in-X-Y.y Y)
-                        x-y-in-X-Y.x-y-pred?)
-                       x1-x2-expr))
-                 (dp-ground-set->list Y))))
-          (dp-ground-set->list X)))]))
+  (quantifier-body '∀ #'r:andmap #'r:implies stx))
 
 (define-syntax (∃ stx)
-  (syntax-parse stx
-    [(_ x-in-X:element-of-a-set expr)
-     #`(let ([X (contracted-v/kc
-                  dp-set/kc
-                  x-in-X.X
-                  #,(syntax-srcloc #'x-in-X.X)
-                  '∃
-                  (list "the value quantified over"))])
-          (r:ormap
-           (r:λ (x-in-X.x)
-                (r:and
-                 (set-∈ x-in-X.x X)
-                 expr))
-           (dp-ground-set->list X)))]
-    [(_ x-y-in-X-Y:element-of-product-of-2-sets x1-x2-expr)
-     #`(let ([X (contracted-v/kc
-                 dp-set/kc
-                 x-y-in-X-Y.X
-                 #,(syntax-srcloc #'x-y-in-X-Y.X)
-                 '∃
-                 (list "the value quantified over"))]
-             [Y (contracted-v/kc
-                 dp-set/kc
-                 x-y-in-X-Y.Y
-                 #,(syntax-srcloc #'x-y-in-X-Y.Y)
-                 '∃
-                 (list "the value quantified over"))])
-         (r:ormap
-          (r:λ (x-y-in-X-Y.x)
-               (r:and
-                (set-∈ x-y-in-X-Y.x X)
-                (r:ormap
-                 (r:λ (x-y-in-X-Y.y)
-                      (r:and
-                       (r:and
-                        (set-∈ x-y-in-X-Y.y Y)
-                        x-y-in-X-Y.x-y-pred?)
-                       x1-x2-expr))
-                 (dp-ground-set->list Y))))
-          (dp-ground-set->list X)))]))
+  (quantifier-body '∃ #'r:ormap #'r:and stx))
 
 (define-syntax (at-most-1-element-of stx)
   (syntax-parse stx
