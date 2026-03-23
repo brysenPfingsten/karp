@@ -1,6 +1,6 @@
 #lang racket
 
-(require "../private/core-structures.rkt"
+(require "../private/core-structures/set.rkt"
          "../private/karp-contract.rkt"
          "../private/problem-definition-utility.rkt"
          [rename-in "../private/primitive-data-type.rkt"
@@ -13,7 +13,7 @@
 (define c (set (set 1 2) (set 1 2 3)))
 (define d (set (set 1 2 3) (set 1 2 4)))
 
-#;(as-set 1)
+(as-set 1)
 
 (define/contract/kc (set-set a-set)
   (->k ([x (and/kc
@@ -35,5 +35,5 @@
 
 #;(no-arg-test)
 
-#;(syntax-parameterize ([dp-solver-env? #t])
+(syntax-parameterize ([dp-solver-env? #t])
   (∀ [x ∈ d] (>= (set-size x) 1)))

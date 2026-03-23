@@ -1,7 +1,8 @@
 #lang racket
 
 (require
-  "private/core-structures.rkt"
+  "private/core-structures/set.rkt"
+  "private/core-structures/tuple.rkt"
   "private/primitive-data-type.rkt"
   "el.rkt"
   [rename-in "private/decision-problem.rkt"
@@ -20,9 +21,7 @@
   [prefix-in r: rosette]
   [for-syntax racket/list
               syntax/parse
-              racket/syntax
-              syntax/id-table
-              syntax/to-string]
+              racket/syntax]
   racket/stxparam
   racket/syntax-srcloc
   #;[for-meta 2 racket/base
@@ -46,7 +45,8 @@
 
 
 (provide
- [except-out (all-from-out "private/core-structures.rkt"
+ [except-out (all-from-out "private/core-structures/set.rkt"
+                           "private/core-structures/tuple.rkt"
                            "private/primitive-data-type.rkt")
               natural
               set-∈-safe

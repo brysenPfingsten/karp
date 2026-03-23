@@ -1,19 +1,16 @@
 #lang racket
 
-(require racket/draw
-         pict
-         (except-in racket/gui set-equal?)
+(require (except-in racket/gui set-equal?)
          (except-in mrlib/graph dot-positioning)
-         framework
-         (only-in "../private/core-structures.rkt"
-				  set-equal?
+         (only-in "../private/core-structures/set.rkt"
+                  set-equal?
                   set-∪
                   dp-list->set
                   dp-set-members->list
-                  dp-tuple?
                   [set dp-set])
+         (only-in "../private/core-structures/tuple.rkt"
+                  dp-tuple?)
          (only-in "modified/dot.rkt" dot-positioning)
-         (only-in "../el.rkt" el?)
          (prefix-in gviz-wrap: "../gviz-wrapper/interface.rkt") 
          (prefix-in mrlib: mrlib/image-core)
          "graph.rkt")
