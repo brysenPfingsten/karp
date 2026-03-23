@@ -753,6 +753,24 @@
 <summary>core-structures.rkt</summary>
 
 ```racket
+; return a contract checking the set size of a set being exactly n
+(define (dp-set-size=/c n)
+  (make-flat-contract
+   #:name 'set-size
+   #:late-neg-projection
+   (λ (blame)
+     (λ (a-set neg-party)
+       ; alternatively: use dp-equal? to wrap raw int if present
+       (if (equal? (dp-int-unwrap (set-size a-set))
+                   (dp-int-unwrap n))
+           a-set
+           (raise-blame-error blame #:missing-party neg-party
+                              a-set '(expected "a set of size ~e" given: "~e")
+                              n
+                              a-set))))))
+```
+
+```racket
 ; ---- discarded currently, maybe switch to this design in the future ----
 ; element
 ; struct wrapping something, mainly symbol, as id.
