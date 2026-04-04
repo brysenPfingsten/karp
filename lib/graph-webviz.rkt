@@ -120,11 +120,19 @@
 
 (define (steps->json steps node-id-of edge-id-of)
   (for/list ([step (in-list steps)])
-    (match-define (list vs es) step)
+    (define vs (if (and (list? step) (>= (length step) 1)) (first step) (set)))
+    (define es (if (and (list? step) (>= (length step) 2)) (second step) (set)))
     (hash "addNodes" (for/list ([v (in-list (set->list vs))])
                         (node-id-of (vertex-id v)))
           "addEdges" (for/list ([e (in-list (set->list es))])
                         (edge-id-of (edge-id (e-u e) (e-v e)))))))
+
+(define (steps->labels steps)
+  (for/list ([step (in-list steps)])
+    (and (list? step)
+         (= (length step) 3)
+         (let ([label (list-ref step 2)])
+           (and label (format "~a" label))))))
 
 (define (json-escape s)
   (define replacements
@@ -170,11 +178,12 @@
   (define js-path (build-path base-dir "vendor" "cytoscape.min.js"))
   (and (file-exists? js-path) js-path))
 
-(define (write-hc-steps-html steps output-path #:title [title "3SAT -> Hamiltonian Cycle"])
+(define (write-hc-steps-html steps output-path #:title [title "3SAT -> Hamiltonian Cycle"] #:labels [labels #f])
   (define nodes (make-hash))
   (define edges (make-hash))
   (for ([step (in-list steps)])
-    (match-define (list vs es) step)
+    (define vs (if (and (list? step) (>= (length step) 1)) (first step) (set)))
+    (define es (if (and (list? step) (>= (length step) 2)) (second step) (set)))
     (for ([v (in-list (set->list vs))])
       (hash-set! nodes (vertex-id v) v))
     (for ([e (in-list (set->list es))])
@@ -222,6 +231,7 @@
     (hash "nodes" nodes-json
           "edges" edges-json
           "steps" (steps->json steps node-id-of edge-id-of)
+          "stepLabels" (or labels (steps->labels steps) #f)
           "viewBox" (bounds nodes-json)))
 
   (define json-data (json->string data))
@@ -242,11 +252,12 @@
      "  header { padding: 16px 20px; border-bottom: 2px solid #222; background: #f0eadc; }\n"
      "  header h1 { margin: 0; font-size: 20px; letter-spacing: 0.5px; }\n"
      "  #app { display: flex; flex-direction: column; height: 100vh; }\n"
-     "  .toolbar { display: flex; gap: 8px; align-items: center; padding: 12px 20px; background: #efe7d6; border-bottom: 1px solid #c7bea8; }\n"
+     "  .toolbar { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 12px 20px; background: #efe7d6; border-bottom: 1px solid #c7bea8; }\n"
      "  .toolbar button { border: 1px solid #1b1b1b; background: #fff6dd; padding: 6px 10px; cursor: pointer; }\n"
      "  .toolbar input[type=range] { width: 220px; }\n"
-     "  .stats { margin-left: auto; font-size: 13px; }\n"
-     "  .debug { font-size: 11px; color: #6b6455; }\n"
+     "  .controls { display: flex; gap: 8px; align-items: center; }\n"
+     "  .stats { font-size: 13px; justify-self: end; }\n"
+     "  .annotation { font-size: 14px; font-weight: 700; text-align: center; color: #2f2a1f; }\n"
      "  #graph { flex: 1 1 auto; width: 100%; min-height: 420px; background: radial-gradient(circle at 20% 10%, #fff 0%, #f6f3ea 60%, #efe5d0 100%); }\n"
      "</style>\n"
      "</head>\n"
@@ -254,12 +265,14 @@
      "<div id=\"app\">\n"
      "  <header><h1>" title "</h1></header>\n"
      "  <div class=\"toolbar\">\n"
-     "    <button id=\"back\">Prev</button>\n"
-     "    <button id=\"forward\">Next</button>\n"
-     "    <button id=\"layout\">Layout</button>\n"
-     "    <input id=\"slider\" type=\"range\" min=\"0\" value=\"0\">\n"
+     "    <div class=\"controls\">\n"
+     "      <button id=\"back\">Prev</button>\n"
+     "      <button id=\"forward\">Next</button>\n"
+     "      <button id=\"layout\">Layout</button>\n"
+     "      <input id=\"slider\" type=\"range\" min=\"0\" value=\"0\">\n"
+     "    </div>\n"
+     "    <div class=\"annotation\" id=\"annotation\"></div>\n"
      "    <div class=\"stats\" id=\"stats\"></div>\n"
-     "    <div class=\"debug\" id=\"debug\"></div>\n"
      "  </div>\n"
      "  <div id=\"graph\" aria-label=\"graph visualization\"></div>\n"
      "</div>\n"
@@ -270,6 +283,7 @@
      "const data = " json-data ";\n"
      "window.graphData = data;\n"
      "const steps = data.steps;\n"
+     "const stepLabels = data.stepLabels || null;\n"
      "const slider = document.getElementById('slider');\n"
      "slider.max = steps.length;\n"
      "let stepIndex = 0;\n"
@@ -314,9 +328,26 @@
      "  ]\n"
      "});\n"
      "cy.elements().addClass('hidden');\n"
+     "const nodeMeta = new Map(data.nodes.map(n => [n.id, n]));\n"
      "cy.fit(cy.elements(), 40);\n"
      "const baseZoom = cy.zoom();\n"
      "const basePan = cy.pan();\n"
+
+     "function autoLabel(step) {\n"
+     "  const nodes = step.addNodes || [];\n"
+     "  const edges = step.addEdges || [];\n"
+     "  if (!nodes.length && edges.length) return 'Add edges';\n"
+     "  if (!nodes.length && !edges.length) return '';\n"
+     "  const kinds = new Set();\n"
+     "  for (const id of nodes) {\n"
+     "    const meta = nodeMeta.get(id);\n"
+     "    if (meta && meta.kind) kinds.add(meta.kind);\n"
+     "  }\n"
+     "  if (kinds.size === 1 && kinds.has('terminal')) return 'Add terminal nodes';\n"
+     "  if (kinds.size === 1 && kinds.has('clause')) return 'Add clause nodes';\n"
+     "  if (kinds.has('var') || kinds.has('var-tail')) return 'Add variable gadget nodes';\n"
+     "  return 'Add nodes';\n"
+     "}\n"
 
      "function setStep(next) {\n"
      "  stepIndex = Math.max(0, Math.min(next, steps.length));\n"
@@ -331,7 +362,8 @@
      "  for (const e of activeEdges) cy.getElementById(e).removeClass('hidden');\n"
      "  slider.value = stepIndex;\n"
      "  document.getElementById('stats').textContent = `Step ${stepIndex}/${steps.length} | Nodes ${activeNodes.size} | Edges ${activeEdges.size}`;\n"
-     "  document.getElementById('debug').textContent = `cy: ${typeof cytoscape} | el: ${cy.elements().length}`;\n"
+     "  const stepLabel = stepIndex > 0 ? (stepLabels && stepLabels[stepIndex - 1]) : '';\n"
+     "  document.getElementById('annotation').textContent = stepLabel || (stepIndex > 0 ? autoLabel(steps[stepIndex - 1]) : '');\n"
      "  cy.zoom(baseZoom);\n"
      "  cy.pan(basePan);\n"
      "}\n"

@@ -156,7 +156,8 @@
 (define-syntax for/set/acc
   (syntax-parser
     [(_ acc log {elem-expr (~seq , elem-expr1) ... (~seq (~datum for) (~optional (~and step-kw #:step-each)) x-in-X:element-of-a-set) ...+
-                   (~optional (~seq (~datum if) pred-elem))})
+                   (~optional (~seq (~datum if) pred-elem))}
+        (~optional (~seq #:label label-expr)))
      #:with (x-in-X/kc+step? ...)
        (for/list ([i (in-naturals 1)]
                   [an-x (attribute x-in-X.x)]
@@ -175,17 +176,19 @@
                                   ((dp-wrap-if-raw-int elem-expr)
                                   (dp-wrap-if-raw-int elem-expr1) ...)
                                   x-in-X/kc+step? ...
+                                  (~? label-expr #f)
                                   #:if (~? pred-elem)))])
        ;; TODO: What if you don't want to have to step through
        ;; If you get rid of the next line, it will skip but not to a natural point
        ;; Consider dumping before if you don't have a step-each in there? Something like that
-       (dump-curr-to-log! acc log)
+       (dump-curr-to-log! acc log (~? label-expr #f))
        res)]))
 
 (define-syntax for/set
   (syntax-parser
     [(_ {elem-expr (~seq , elem-expr1) ... (~seq (~datum for) (~optional #:step-each) x-in-X:element-of-a-set) ...+
-                   (~optional (~seq (~datum if) pred-elem))})
+                   (~optional (~seq (~datum if) pred-elem))}
+        (~optional (~seq #:label label-expr)))
      #:with (x-in-X/kc ...)
      (let ([xs (syntax->list #'(x-in-X.x ...))]
            [inds (syntax->list #'((~? x-in-X.ind #f) ...))]
@@ -206,7 +209,7 @@
 
 (define-syntax for/set-core/acc
   (syntax-parser
-    [(_ acc log (elem-expr ...+) (x-in-X:element-of-a-set step?) #:if (~optional pred-expr))
+    [(_ acc log (elem-expr ...+) (x-in-X:element-of-a-set step?) label-expr #:if (~optional pred-expr))
      #:with (elem-res-type ...) (generate-temporaries #'(elem-expr ...))
      ; NOTE: ``dp-set-element-index'' already shrinked the set
      #`(apply
@@ -232,19 +235,19 @@
                    ...))
                 (add-elems-to-acc! acc new-elems)
                 #,(if (syntax-e #'step?)
-                      #'(dump-curr-to-log! acc log)
+                      #'(dump-curr-to-log! acc log label-expr)
                       #'(begin))
                 new-elems))))]
-[(_ acc log (elem-expr ...+) (x0-in-X0:element-of-a-set step?0) ... (xn-in-Xn:element-of-a-set step?) #:if (~optional pred-elem))
+[(_ acc log (elem-expr ...+) (x0-in-X0:element-of-a-set step?0) ... (xn-in-Xn:element-of-a-set step?) label-expr #:if (~optional pred-elem))
  #`(apply
     append
     (let ([el-with-index (dp-set-element-index xn-in-Xn.X)])
       (for*/list ([xn-in-Xn.x (hash-keys el-with-index)]
                   [(~? xn-in-Xn.ind i)
                    (list (hash-ref el-with-index xn-in-Xn.x))])
-        (let ([inner (for/set-core/acc acc log (elem-expr ...) (x0-in-X0 step?0) ... #:if (~? pred-elem))])
+        (let ([inner (for/set-core/acc acc log (elem-expr ...) (x0-in-X0 step?0) ... label-expr #:if (~? pred-elem))])
           #,(if (syntax-e #'step?)
-                #'(dump-curr-to-log! acc log)
+                #'(dump-curr-to-log! acc log label-expr)
                 #'(begin))
           inner))))]))
 
@@ -501,13 +504,16 @@
  define-forward-certificate-construction
  define-backward-certificate-construction)
 
-(define (dump-curr-to-log! curr-change-acc step-log)
+(define (dump-curr-to-log! curr-change-acc step-log [label #f])
   (match curr-change-acc
     [(box (list (? dp-set? vs) (? dp-set? es))) #:when (and (set-equal? vs (set))
                                                             (set-equal? es (set)))
      (void)]
     [(box (list (? dp-set?) (? dp-set?)))
-      (set-box! step-log (append (unbox step-log) (list (unbox curr-change-acc))))
+      (define entry (if label
+                        (append (unbox curr-change-acc) (list label))
+                        (unbox curr-change-acc)))
+      (set-box! step-log (append (unbox step-log) (list entry)))
       (set-box! curr-change-acc (list (set) (set)))]))
 
 (define (add-elems-to-acc! acc new-elems)
