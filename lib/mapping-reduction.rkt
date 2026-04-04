@@ -6,6 +6,7 @@
                      syntax/stx
                      racket/list]
          "../private/karp-contract.rkt"
+         "../private/core-structures/dp-mergeable.rkt"
          racket/stxparam
          racket/syntax-srcloc)
 

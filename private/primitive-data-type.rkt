@@ -549,6 +549,20 @@
                                 #'(and arg ...)
                                 #'and)])])))
 
+(provide or-typed-rewriter)
+(define-syntax or-typed-rewriter
+  (λ (arg-lst)
+    (match arg-lst
+      [(list (cons _ (tBool)) ...)
+       (λ (stx) (cons stx (tBool)))]
+      [_ (syntax-parser
+           [(or arg ...)
+            (raise-syntax-error #f
+                                (format "expects booleans, gets ~a"
+                                        (map get-τb arg-lst))
+                                #'(or arg ...)
+                                #'or)])])))
+
 (kv-func-type-annotate xor ((tBool) (tBool) (tBool)) "two booleans")
 (kv-func-type-annotate implies ((tBool) (tBool) (tBool)) "two booleans")
 (kv-func-type-annotate not ((tBool) (tBool)) "one booleans")
