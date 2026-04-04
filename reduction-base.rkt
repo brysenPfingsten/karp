@@ -14,7 +14,6 @@
   [only-in racket/list
            (argmax lst-argmax)
            (argmin lst-argmin)]
-  "lib/graph-inspector.rkt"
   racket/require
   racket/require-syntax
   [prefix-in r: rosette]
@@ -58,6 +57,11 @@
 
 (provide check-reduction)
 ;
+
+(define (visualize/step* steps)
+  (define visualize/step
+    (dynamic-require "lib/graph-inspector.rkt" 'visualize/step))
+  (visualize/step steps))
 
 
 
@@ -535,10 +539,11 @@
                    [instance-type-info (format-id #'t "dp-instance-type-~a" #'t)]
                    [instance-type-annotate (format-id #'s "dp-annotate-instance-type-~a" #'s)]
                    [step-id-internal (generate-temporary #'step-id)]
+                   [step-id-steps (format-id #'step-id "~a-steps" #'step-id)]
                    [step-log (generate-temporary #'gui-acc)])
        #'(begin
 
-           (define (step-id-internal a-s-instance)
+           (define (step-id-steps a-s-instance)
              ; add type annotation to source instance argument
              (define-syntax inst-id
                (instance-type-annotate #'a-s-instance))
@@ -546,7 +551,10 @@
              (define curr-change-acc (box (list (set) (set)))) ;;: (List (Setof Vertex) (Setof Edge))
              (define v (for/set/acc curr-change-acc step-log . parts))
              ...
-             (visualize/step (unbox step-log)))
+             (unbox step-log))
+
+           (define (step-id-internal a-s-instance)
+             (visualize/step* (step-id-steps a-s-instance)))
 
            (define-syntax step-id
              (func-type-info

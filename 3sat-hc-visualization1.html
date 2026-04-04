@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3SAT -> Hamiltonian Cycle</title>
+<style>
+  :root { --bg: #f6f3ea; --ink: #1b1b1b; --accent: #0d5c63; --edge: #4b4b4b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Georgia, serif; background: var(--bg); color: var(--ink); }
+  header { padding: 16px 20px; border-bottom: 2px solid #222; background: #f0eadc; }
+  header h1 { margin: 0; font-size: 20px; letter-spacing: 0.5px; }
+  #app { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+  .toolbar { display: flex; gap: 8px; align-items: center; padding: 12px 20px; background: #efe7d6; border-bottom: 1px solid #c7bea8; }
+  .toolbar button { border: 1px solid #1b1b1b; background: #fff6dd; padding: 6px 10px; cursor: pointer; }
+  .toolbar input[type=range] { width: 220px; }
+  .stats { margin-left: auto; font-size: 13px; }
+  #graph { width: 100%; height: 100%; background: radial-gradient(circle at 20% 10%, #fff 0%, #f6f3ea 60%, #efe5d0 100%); }
+  .edge { stroke: var(--edge); stroke-width: 1.4; opacity: 0.7; }
+  .node { stroke: #111; stroke-width: 1; cursor: grab; }
+  .node.dragging { cursor: grabbing; }
+  .node.var { fill: #f7b32b; }
+  .node.var-tail { fill: #f6ae2d; }
+  .node.clause { fill: #f9564f; }
+  .node.terminal { fill: #0d5c63; }
+  .node.other { fill: #c0c0c0; }
+  .label { font-size: 11px; pointer-events: none; fill: #1b1b1b; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header><h1>3SAT -> Hamiltonian Cycle</h1></header>
+  <div class="toolbar">
+    <button id="back">Prev</button>
+    <button id="forward">Next</button>
+    <input id="slider" type="range" min="0" value="0">
+    <div class="stats" id="stats"></div>
+  </div>
+  <svg id="graph" aria-label="graph visualization"></svg>
+</div>
+<script>
+const data = {"nodes":[{"kind":"var","label":"<2ₚ, 0ₚ, +>","j":0,"x":0,"y":198,"i":2,"id":"<2ₚ, 0ₚ, +>","tag":"+"},{"kind":"var-tail","label":"<2ₚ, $>","j":3,"x":660,"y":198,"i":2,"id":"<2ₚ, $>","tag":"$"},{"kind":"var","label":"<1ₚ, 2ₚ, ->","j":2,"x":440,"y":90,"i":1,"id":"<1ₚ, 2ₚ, ->","tag":"-"},{"kind":"var","label":"<4ₚ, 1ₚ, +>","j":1,"x":220,"y":378,"i":4,"id":"<4ₚ, 1ₚ, +>","tag":"+"},{"kind":"var","label":"<3ₚ, 1ₚ, +>","j":1,"x":220,"y":288,"i":3,"id":"<3ₚ, 1ₚ, +>","tag":"+"},{"kind":"var","label":"<3ₚ, 1ₚ, *>","j":1,"x":220,"y":306,"i":3,"id":"<3ₚ, 1ₚ, *>","tag":"*"},{"kind":"var","label":"<2ₚ, 2ₚ, *>","j":2,"x":440,"y":216,"i":2,"id":"<2ₚ, 2ₚ, *>","tag":"*"},{"kind":"var","label":"<1ₚ, 2ₚ, *>","j":2,"x":440,"y":126,"i":1,"id":"<1ₚ, 2ₚ, *>","tag":"*"},{"kind":"var","label":"<3ₚ, 2ₚ, ->","j":2,"x":440,"y":270,"i":3,"id":"<3ₚ, 2ₚ, ->","tag":"-"},{"kind":"var-tail","label":"<3ₚ, $>","j":3,"x":660,"y":288,"i":3,"id":"<3ₚ, $>","tag":"$"},{"kind":"var","label":"<2ₚ, 2ₚ, ->","j":2,"x":440,"y":180,"i":2,"id":"<2ₚ, 2ₚ, ->","tag":"-"},{"kind":"var","label":"<2ₚ, 1ₚ, +>","j":1,"x":220,"y":198,"i":2,"id":"<2ₚ, 1ₚ, +>","tag":"+"},{"kind":"var","label":"<2ₚ, 2ₚ, +>","j":2,"x":440,"y":198,"i":2,"id":"<2ₚ, 2ₚ, +>","tag":"+"},{"kind":"var","label":"<1ₚ, 2ₚ, +>","j":2,"x":440,"y":108,"i":1,"id":"<1ₚ, 2ₚ, +>","tag":"+"},{"kind":"var","label":"<1ₚ, 0ₚ, ->","j":0,"x":0,"y":90,"i":1,"id":"<1ₚ, 0ₚ, ->","tag":"-"},{"kind":"var","label":"<1ₚ, 0ₚ, +>","j":0,"x":0,"y":108,"i":1,"id":"<1ₚ, 0ₚ, +>","tag":"+"},{"kind":"terminal","label":"<s>","j":false,"x":-220,"y":468,"i":false,"id":"<s>","tag":"s"},{"kind":"var","label":"<3ₚ, 0ₚ, ->","j":0,"x":0,"y":270,"i":3,"id":"<3ₚ, 0ₚ, ->","tag":"-"},{"kind":"var-tail","label":"<1ₚ, $>","j":3,"x":660,"y":108,"i":1,"id":"<1ₚ, $>","tag":"$"},{"kind":"var","label":"<1ₚ, 1ₚ, ->","j":1,"x":220,"y":90,"i":1,"id":"<1ₚ, 1ₚ, ->","tag":"-"},{"kind":"terminal","label":"<t>","j":false,"x":880,"y":468,"i":false,"id":"<t>","tag":"t"},{"kind":"var","label":"<4ₚ, 0ₚ, ->","j":0,"x":0,"y":360,"i":4,"id":"<4ₚ, 0ₚ, ->","tag":"-"},{"kind":"var","label":"<4ₚ, 2ₚ, +>","j":2,"x":440,"y":378,"i":4,"id":"<4ₚ, 2ₚ, +>","tag":"+"},{"kind":"var","label":"<2ₚ, 1ₚ, *>","j":1,"x":220,"y":216,"i":2,"id":"<2ₚ, 1ₚ, *>","tag":"*"},{"kind":"var","label":"<1ₚ, 1ₚ, +>","j":1,"x":220,"y":108,"i":1,"id":"<1ₚ, 1ₚ, +>","tag":"+"},{"kind":"var","label":"<3ₚ, 2ₚ, +>","j":2,"x":440,"y":288,"i":3,"id":"<3ₚ, 2ₚ, +>","tag":"+"},{"kind":"var","label":"<2ₚ, 1ₚ, ->","j":1,"x":220,"y":180,"i":2,"id":"<2ₚ, 1ₚ, ->","tag":"-"},{"kind":"var","label":"<4ₚ, 0ₚ, +>","j":0,"x":0,"y":378,"i":4,"id":"<4ₚ, 0ₚ, +>","tag":"+"},{"kind":"var","label":"<1ₚ, 1ₚ, *>","j":1,"x":220,"y":126,"i":1,"id":"<1ₚ, 1ₚ, *>","tag":"*"},{"kind":"var-tail","label":"<4ₚ, $>","j":3,"x":660,"y":378,"i":4,"id":"<4ₚ, $>","tag":"$"},{"kind":"var","label":"<3ₚ, 2ₚ, *>","j":2,"x":440,"y":306,"i":3,"id":"<3ₚ, 2ₚ, *>","tag":"*"},{"kind":"var","label":"<2ₚ, 0ₚ, ->","j":0,"x":0,"y":180,"i":2,"id":"<2ₚ, 0ₚ, ->","tag":"-"},{"kind":"clause","label":"<1ₚ>","j":1,"x":220,"y":18,"i":false,"id":"<1ₚ>","tag":false},{"kind":"var","label":"<4ₚ, 2ₚ, *>","j":2,"x":440,"y":396,"i":4,"id":"<4ₚ, 2ₚ, *>","tag":"*"},{"kind":"var","label":"<4ₚ, 1ₚ, ->","j":1,"x":220,"y":360,"i":4,"id":"<4ₚ, 1ₚ, ->","tag":"-"},{"kind":"clause","label":"<2ₚ>","j":2,"x":440,"y":18,"i":false,"id":"<2ₚ>","tag":false},{"kind":"var","label":"<4ₚ, 2ₚ, ->","j":2,"x":440,"y":360,"i":4,"id":"<4ₚ, 2ₚ, ->","tag":"-"},{"kind":"var","label":"<4ₚ, 1ₚ, *>","j":1,"x":220,"y":396,"i":4,"id":"<4ₚ, 1ₚ, *>","tag":"*"},{"kind":"var","label":"<3ₚ, 1ₚ, ->","j":1,"x":220,"y":270,"i":3,"id":"<3ₚ, 1ₚ, ->","tag":"-"},{"kind":"var","label":"<3ₚ, 0ₚ, +>","j":0,"x":0,"y":288,"i":3,"id":"<3ₚ, 0ₚ, +>","tag":"+"}],"steps":[{"addNodes":["<1ₚ, 0ₚ, ->"],"addEdges":[]},{"addNodes":["<2ₚ, 0ₚ, ->"],"addEdges":[]},{"addNodes":["<3ₚ, 0ₚ, ->"],"addEdges":[]},{"addNodes":["<4ₚ, 0ₚ, ->"],"addEdges":[]},{"addNodes":["<2ₚ, 0ₚ, +>","<4ₚ, 0ₚ, +>","<1ₚ, 0ₚ, +>","<3ₚ, 0ₚ, +>"],"addEdges":[]},{"addNodes":["<2ₚ, $>","<4ₚ, $>","<1ₚ, $>","<3ₚ, $>"],"addEdges":[]},{"addNodes":["<3ₚ, 1ₚ, ->","<1ₚ, 2ₚ, ->","<1ₚ, 1ₚ, ->","<3ₚ, 2ₚ, ->","<4ₚ, 2ₚ, ->","<4ₚ, 1ₚ, ->","<2ₚ, 2ₚ, ->","<2ₚ, 1ₚ, ->"],"addEdges":[]},{"addNodes":["<2ₚ, 2ₚ, +>","<4ₚ, 1ₚ, +>","<2ₚ, 1ₚ, +>","<3ₚ, 2ₚ, +>","<1ₚ, 2ₚ, +>","<1ₚ, 1ₚ, +>","<4ₚ, 2ₚ, +>","<3ₚ, 1ₚ, +>"],"addEdges":[]},{"addNodes":["<4ₚ, 1ₚ, *>","<1ₚ, 2ₚ, *>","<3ₚ, 2ₚ, *>","<4ₚ, 2ₚ, *>","<1ₚ, 1ₚ, *>","<2ₚ, 2ₚ, *>","<3ₚ, 1ₚ, *>","<2ₚ, 1ₚ, *>"],"addEdges":[]},{"addNodes":["<1ₚ>","<2ₚ>"],"addEdges":[]},{"addNodes":["<t>","<s>"],"addEdges":[]},{"addNodes":[],"addEdges":["<1ₚ, 0ₚ, +> -> <1ₚ, 0ₚ, ->","<2ₚ, 2ₚ, *> -> <2ₚ, $>","<2ₚ, 0ₚ, +> -> <2ₚ, 1ₚ, ->","<1ₚ, 1ₚ, -> -> <1ₚ, 0ₚ, +>","<4ₚ, 1ₚ, -> -> <4ₚ, 0ₚ, +>","<2ₚ, $> -> <2ₚ, 2ₚ, *>","<1ₚ, 2ₚ, *> -> <1ₚ, $>","<4ₚ, 2ₚ, *> -> <4ₚ, $>","<4ₚ, $> -> <4ₚ, 2ₚ, *>","<3ₚ, 0ₚ, +> -> <3ₚ, 1ₚ, ->","<3ₚ, 0ₚ, -> -> <3ₚ, 0ₚ, +>","<3ₚ, 1ₚ, -> -> <3ₚ, 0ₚ, +>","<4ₚ, 0ₚ, +> -> <4ₚ, 0ₚ, ->","<2ₚ, 1ₚ, -> -> <2ₚ, 0ₚ, +>","<1ₚ, 0ₚ, -> -> <1ₚ, 0ₚ, +>","<4ₚ, 0ₚ, -> -> <4ₚ, 0ₚ, +>","<3ₚ, 0ₚ, +> -> <3ₚ, 0ₚ, ->","<4ₚ, 0ₚ, +> -> <4ₚ, 1ₚ, ->","<1ₚ, $> -> <1ₚ, 2ₚ, *>","<2ₚ, 0ₚ, -> -> <2ₚ, 0ₚ, +>","<3ₚ, $> -> <3ₚ, 2ₚ, *>","<3ₚ, 2ₚ, *> -> <3ₚ, $>","<2ₚ, 0ₚ, +> -> <2ₚ, 0ₚ, ->","<1ₚ, 0ₚ, +> -> <1ₚ, 1ₚ, ->"]},{"addNodes":[],"addEdges":["<1ₚ, 1ₚ, +> -> <1ₚ, 1ₚ, ->","<1ₚ, 2ₚ, -> -> <1ₚ, 2ₚ, +>","<4ₚ, 1ₚ, *> -> <4ₚ, 1ₚ, +>","<4ₚ, 1ₚ, +> -> <4ₚ, 1ₚ, *>","<2ₚ, 1ₚ, +> -> <2ₚ, 1ₚ, *>","<2ₚ, 2ₚ, +> -> <2ₚ, 2ₚ, *>","<4ₚ, 1ₚ, -> -> <4ₚ, 1ₚ, +>","<2ₚ, 2ₚ, -> -> <2ₚ, 2ₚ, +>","<3ₚ, 2ₚ, +> -> <3ₚ, 2ₚ, *>","<4ₚ, 2ₚ, *> -> <4ₚ, 2ₚ, +>","<3ₚ, 1ₚ, -> -> <3ₚ, 1ₚ, +>","<3ₚ, 2ₚ, -> -> <3ₚ, 2ₚ, +>","<4ₚ, 2ₚ, +> -> <4ₚ, 2ₚ, *>","<1ₚ, 2ₚ, +> -> <1ₚ, 2ₚ, *>","<3ₚ, 2ₚ, +> -> <3ₚ, 2ₚ, ->","<2ₚ, 2ₚ, +> -> <2ₚ, 2ₚ, ->","<1ₚ, 2ₚ, +> -> <1ₚ, 2ₚ, ->","<2ₚ, 1ₚ, +> -> <2ₚ, 1ₚ, ->","<1ₚ, 2ₚ, *> -> <1ₚ, 2ₚ, +>","<2ₚ, 1ₚ, *> -> <2ₚ, 1ₚ, +>","<4ₚ, 2ₚ, -> -> <4ₚ, 2ₚ, +>","<3ₚ, 1ₚ, +> -> <3ₚ, 1ₚ, ->","<4ₚ, 2ₚ, +> -> <4ₚ, 2ₚ, ->","<1ₚ, 1ₚ, -> -> <1ₚ, 1ₚ, +>","<2ₚ, 1ₚ, -> -> <2ₚ, 1ₚ, +>","<1ₚ, 1ₚ, *> -> <1ₚ, 1ₚ, +>","<3ₚ, 2ₚ, *> -> <3ₚ, 2ₚ, +>","<3ₚ, 1ₚ, *> -> <3ₚ, 1ₚ, +>","<2ₚ, 2ₚ, *> -> <2ₚ, 2ₚ, +>","<4ₚ, 1ₚ, +> -> <4ₚ, 1ₚ, ->","<1ₚ, 1ₚ, +> -> <1ₚ, 1ₚ, *>","<3ₚ, 1ₚ, +> -> <3ₚ, 1ₚ, *>"]},{"addNodes":[],"addEdges":["<3ₚ, 1ₚ, *> -> <3ₚ, 2ₚ, ->","<2ₚ, 1ₚ, *> -> <2ₚ, 2ₚ, ->","<1ₚ, 1ₚ, *> -> <1ₚ, 2ₚ, ->","<4ₚ, 1ₚ, *> -> <4ₚ, 2ₚ, ->"]},{"addNodes":[],"addEdges":["<3ₚ, 2ₚ, -> -> <3ₚ, 1ₚ, *>","<4ₚ, 2ₚ, -> -> <4ₚ, 1ₚ, *>","<2ₚ, 2ₚ, -> -> <2ₚ, 1ₚ, *>","<1ₚ, 2ₚ, -> -> <1ₚ, 1ₚ, *>"]},{"addNodes":[],"addEdges":["<3ₚ, $> -> <4ₚ, 0ₚ, ->","<2ₚ, $> -> <3ₚ, $>","<1ₚ, $> -> <2ₚ, $>","<3ₚ, $> -> <4ₚ, $>","<1ₚ, 0ₚ, -> -> <2ₚ, $>","<3ₚ, 0ₚ, -> -> <4ₚ, 0ₚ, ->","<2ₚ, 0ₚ, -> -> <3ₚ, 0ₚ, ->","<2ₚ, $> -> <3ₚ, 0ₚ, ->","<2ₚ, 0ₚ, -> -> <3ₚ, $>","<1ₚ, $> -> <2ₚ, 0ₚ, ->","<3ₚ, 0ₚ, -> -> <4ₚ, $>","<1ₚ, 0ₚ, -> -> <2ₚ, 0ₚ, ->"]},{"addNodes":[],"addEdges":["<s> -> <1ₚ, 0ₚ, ->","<s> -> <1ₚ, $>"]},{"addNodes":[],"addEdges":["<4ₚ, 0ₚ, -> -> <t>","<4ₚ, $> -> <t>"]},{"addNodes":[],"addEdges":["<t> -> <s>"]},{"addNodes":[],"addEdges":["<2ₚ> -> <4ₚ, 2ₚ, +>","<1ₚ> -> <1ₚ, 1ₚ, +>","<1ₚ, 1ₚ, -> -> <1ₚ>","<4ₚ, 2ₚ, -> -> <2ₚ>","<1ₚ> -> <3ₚ, 1ₚ, +>","<3ₚ, 1ₚ, -> -> <1ₚ>","<1ₚ> -> <2ₚ, 1ₚ, +>","<2ₚ, 1ₚ, -> -> <1ₚ>"]},{"addNodes":[],"addEdges":["<3ₚ, 2ₚ, +> -> <2ₚ>","<1ₚ, 2ₚ, +> -> <2ₚ>","<2ₚ> -> <3ₚ, 2ₚ, ->","<2ₚ> -> <1ₚ, 2ₚ, ->"]}],"viewBox":{"width":1260,"height":610,"minY":-62,"minX":-300},"edges":[{"target":"<4ₚ, 2ₚ, ->","source":"<4ₚ, 2ₚ, +>","id":"<4ₚ, 2ₚ, +> -> <4ₚ, 2ₚ, ->"},{"target":"<1ₚ, 0ₚ, ->","source":"<s>","id":"<s> -> <1ₚ, 0ₚ, ->"},{"target":"<2ₚ, 2ₚ, +>","source":"<2ₚ, 2ₚ, ->","id":"<2ₚ, 2ₚ, -> -> <2ₚ, 2ₚ, +>"},{"target":"<1ₚ, 1ₚ, ->","source":"<1ₚ, 0ₚ, +>","id":"<1ₚ, 0ₚ, +> -> <1ₚ, 1ₚ, ->"},{"target":"<1ₚ, 2ₚ, *>","source":"<1ₚ, 2ₚ, +>","id":"<1ₚ, 2ₚ, +> -> <1ₚ, 2ₚ, *>"},{"target":"<4ₚ, 2ₚ, +>","source":"<4ₚ, 2ₚ, ->","id":"<4ₚ, 2ₚ, -> -> <4ₚ, 2ₚ, +>"},{"target":"<3ₚ, $>","source":"<2ₚ, $>","id":"<2ₚ, $> -> <3ₚ, $>"},{"target":"<4ₚ, 0ₚ, +>","source":"<4ₚ, 1ₚ, ->","id":"<4ₚ, 1ₚ, -> -> <4ₚ, 0ₚ, +>"},{"target":"<4ₚ, 2ₚ, *>","source":"<4ₚ, 2ₚ, +>","id":"<4ₚ, 2ₚ, +> -> <4ₚ, 2ₚ, *>"},{"target":"<3ₚ, $>","source":"<3ₚ, 2ₚ, *>","id":"<3ₚ, 2ₚ, *> -> <3ₚ, $>"},{"target":"<4ₚ, $>","source":"<4ₚ, 2ₚ, *>","id":"<4ₚ, 2ₚ, *> -> <4ₚ, $>"},{"target":"<s>","source":"<t>","id":"<t> -> <s>"},{"target":"<3ₚ, 2ₚ, ->","source":"<3ₚ, 2ₚ, +>","id":"<3ₚ, 2ₚ, +> -> <3ₚ, 2ₚ, ->"},{"target":"<2ₚ, 1ₚ, +>","source":"<2ₚ, 1ₚ, *>","id":"<2ₚ, 1ₚ, *> -> <2ₚ, 1ₚ, +>"},{"target":"<2ₚ>","source":"<3ₚ, 2ₚ, +>","id":"<3ₚ, 2ₚ, +> -> <2ₚ>"},{"target":"<3ₚ, 1ₚ, +>","source":"<1ₚ>","id":"<1ₚ> -> <3ₚ, 1ₚ, +>"},{"target":"<1ₚ>","source":"<1ₚ, 1ₚ, ->","id":"<1ₚ, 1ₚ, -> -> <1ₚ>"},{"target":"<2ₚ, 2ₚ, *>","source":"<2ₚ, 2ₚ, +>","id":"<2ₚ, 2ₚ, +> -> <2ₚ, 2ₚ, *>"},{"target":"<3ₚ, 0ₚ, ->","source":"<2ₚ, $>","id":"<2ₚ, $> -> <3ₚ, 0ₚ, ->"},{"target":"<3ₚ, 1ₚ, ->","source":"<3ₚ, 0ₚ, +>","id":"<3ₚ, 0ₚ, +> -> <3ₚ, 1ₚ, ->"},{"target":"<2ₚ, 1ₚ, *>","source":"<2ₚ, 1ₚ, +>","id":"<2ₚ, 1ₚ, +> -> <2ₚ, 1ₚ, *>"},{"target":"<1ₚ, $>","source":"<1ₚ, 2ₚ, *>","id":"<1ₚ, 2ₚ, *> -> <1ₚ, $>"},{"target":"<4ₚ, 0ₚ, ->","source":"<3ₚ, 0ₚ, ->","id":"<3ₚ, 0ₚ, -> -> <4ₚ, 0ₚ, ->"},{"target":"<4ₚ, 0ₚ, ->","source":"<4ₚ, 0ₚ, +>","id":"<4ₚ, 0ₚ, +> -> <4ₚ, 0ₚ, ->"},{"target":"<3ₚ, 1ₚ, +>","source":"<3ₚ, 1ₚ, *>","id":"<3ₚ, 1ₚ, *> -> <3ₚ, 1ₚ, +>"},{"target":"<1ₚ, 2ₚ, ->","source":"<1ₚ, 2ₚ, +>","id":"<1ₚ, 2ₚ, +> -> <1ₚ, 2ₚ, ->"},{"target":"<4ₚ, 1ₚ, ->","source":"<4ₚ, 1ₚ, +>","id":"<4ₚ, 1ₚ, +> -> <4ₚ, 1ₚ, ->"},{"target":"<4ₚ, 2ₚ, ->","source":"<4ₚ, 1ₚ, *>","id":"<4ₚ, 1ₚ, *> -> <4ₚ, 2ₚ, ->"},{"target":"<3ₚ, 2ₚ, +>","source":"<3ₚ, 2ₚ, ->","id":"<3ₚ, 2ₚ, -> -> <3ₚ, 2ₚ, +>"},{"target":"<1ₚ, 1ₚ, +>","source":"<1ₚ>","id":"<1ₚ> -> <1ₚ, 1ₚ, +>"},{"target":"<2ₚ, 0ₚ, +>","source":"<2ₚ, 1ₚ, ->","id":"<2ₚ, 1ₚ, -> -> <2ₚ, 0ₚ, +>"},{"target":"<4ₚ, 1ₚ, *>","source":"<4ₚ, 1ₚ, +>","id":"<4ₚ, 1ₚ, +> -> <4ₚ, 1ₚ, *>"},{"target":"<4ₚ, 1ₚ, *>","source":"<4ₚ, 2ₚ, ->","id":"<4ₚ, 2ₚ, -> -> <4ₚ, 1ₚ, *>"},{"target":"<1ₚ, 0ₚ, ->","source":"<1ₚ, 0ₚ, +>","id":"<1ₚ, 0ₚ, +> -> <1ₚ, 0ₚ, ->"},{"target":"<1ₚ, 1ₚ, +>","source":"<1ₚ, 1ₚ, ->","id":"<1ₚ, 1ₚ, -> -> <1ₚ, 1ₚ, +>"},{"target":"<4ₚ, 2ₚ, +>","source":"<2ₚ>","id":"<2ₚ> -> <4ₚ, 2ₚ, +>"},{"target":"<2ₚ, $>","source":"<1ₚ, $>","id":"<1ₚ, $> -> <2ₚ, $>"},{"target":"<2ₚ, 2ₚ, ->","source":"<2ₚ, 1ₚ, *>","id":"<2ₚ, 1ₚ, *> -> <2ₚ, 2ₚ, ->"},{"target":"<2ₚ, 0ₚ, ->","source":"<2ₚ, 0ₚ, +>","id":"<2ₚ, 0ₚ, +> -> <2ₚ, 0ₚ, ->"},{"target":"<1ₚ, 2ₚ, +>","source":"<1ₚ, 2ₚ, *>","id":"<1ₚ, 2ₚ, *> -> <1ₚ, 2ₚ, +>"},{"target":"<1ₚ>","source":"<3ₚ, 1ₚ, ->","id":"<3ₚ, 1ₚ, -> -> <1ₚ>"},{"target":"<4ₚ, $>","source":"<3ₚ, 0ₚ, ->","id":"<3ₚ, 0ₚ, -> -> <4ₚ, $>"},{"target":"<1ₚ, 1ₚ, ->","source":"<1ₚ, 1ₚ, +>","id":"<1ₚ, 1ₚ, +> -> <1ₚ, 1ₚ, ->"},{"target":"<1ₚ, 0ₚ, +>","source":"<1ₚ, 1ₚ, ->","id":"<1ₚ, 1ₚ, -> -> <1ₚ, 0ₚ, +>"},{"target":"<3ₚ, 0ₚ, ->","source":"<3ₚ, 0ₚ, +>","id":"<3ₚ, 0ₚ, +> -> <3ₚ, 0ₚ, ->"},{"target":"<3ₚ, 2ₚ, ->","source":"<3ₚ, 1ₚ, *>","id":"<3ₚ, 1ₚ, *> -> <3ₚ, 2ₚ, ->"},{"target":"<2ₚ, 1ₚ, ->","source":"<2ₚ, 0ₚ, +>","id":"<2ₚ, 0ₚ, +> -> <2ₚ, 1ₚ, ->"},{"target":"<1ₚ, 2ₚ, ->","source":"<2ₚ>","id":"<2ₚ> -> <1ₚ, 2ₚ, ->"},{"target":"<2ₚ, 0ₚ, ->","source":"<1ₚ, 0ₚ, ->","id":"<1ₚ, 0ₚ, -> -> <2ₚ, 0ₚ, ->"},{"target":"<2ₚ, 2ₚ, *>","source":"<2ₚ, $>","id":"<2ₚ, $> -> <2ₚ, 2ₚ, *>"},{"target":"<3ₚ, 1ₚ, +>","source":"<3ₚ, 1ₚ, ->","id":"<3ₚ, 1ₚ, -> -> <3ₚ, 1ₚ, +>"},{"target":"<1ₚ, 1ₚ, *>","source":"<1ₚ, 1ₚ, +>","id":"<1ₚ, 1ₚ, +> -> <1ₚ, 1ₚ, *>"},{"target":"<t>","source":"<4ₚ, 0ₚ, ->","id":"<4ₚ, 0ₚ, -> -> <t>"},{"target":"<2ₚ, 0ₚ, ->","source":"<1ₚ, $>","id":"<1ₚ, $> -> <2ₚ, 0ₚ, ->"},{"target":"<4ₚ, 1ₚ, +>","source":"<4ₚ, 1ₚ, *>","id":"<4ₚ, 1ₚ, *> -> <4ₚ, 1ₚ, +>"},{"target":"<2ₚ, 0ₚ, +>","source":"<2ₚ, 0ₚ, ->","id":"<2ₚ, 0ₚ, -> -> <2ₚ, 0ₚ, +>"},{"target":"<2ₚ, 1ₚ, +>","source":"<2ₚ, 1ₚ, ->","id":"<2ₚ, 1ₚ, -> -> <2ₚ, 1ₚ, +>"},{"target":"<3ₚ, 1ₚ, *>","source":"<3ₚ, 1ₚ, +>","id":"<3ₚ, 1ₚ, +> -> <3ₚ, 1ₚ, *>"},{"target":"<1ₚ, 2ₚ, *>","source":"<1ₚ, $>","id":"<1ₚ, $> -> <1ₚ, 2ₚ, *>"},{"target":"<2ₚ, 2ₚ, ->","source":"<2ₚ, 2ₚ, +>","id":"<2ₚ, 2ₚ, +> -> <2ₚ, 2ₚ, ->"},{"target":"<4ₚ, $>","source":"<3ₚ, $>","id":"<3ₚ, $> -> <4ₚ, $>"},{"target":"<3ₚ, 1ₚ, ->","source":"<3ₚ, 1ₚ, +>","id":"<3ₚ, 1ₚ, +> -> <3ₚ, 1ₚ, ->"},{"target":"<4ₚ, 1ₚ, ->","source":"<4ₚ, 0ₚ, +>","id":"<4ₚ, 0ₚ, +> -> <4ₚ, 1ₚ, ->"},{"target":"<4ₚ, 2ₚ, +>","source":"<4ₚ, 2ₚ, *>","id":"<4ₚ, 2ₚ, *> -> <4ₚ, 2ₚ, +>"},{"target":"<2ₚ, 1ₚ, +>","source":"<1ₚ>","id":"<1ₚ> -> <2ₚ, 1ₚ, +>"},{"target":"<1ₚ, 2ₚ, +>","source":"<1ₚ, 2ₚ, ->","id":"<1ₚ, 2ₚ, -> -> <1ₚ, 2ₚ, +>"},{"target":"<1ₚ, 0ₚ, +>","source":"<1ₚ, 0ₚ, ->","id":"<1ₚ, 0ₚ, -> -> <1ₚ, 0ₚ, +>"},{"target":"<3ₚ, $>","source":"<2ₚ, 0ₚ, ->","id":"<2ₚ, 0ₚ, -> -> <3ₚ, $>"},{"target":"<1ₚ>","source":"<2ₚ, 1ₚ, ->","id":"<2ₚ, 1ₚ, -> -> <1ₚ>"},{"target":"<2ₚ, 1ₚ, ->","source":"<2ₚ, 1ₚ, +>","id":"<2ₚ, 1ₚ, +> -> <2ₚ, 1ₚ, ->"},{"target":"<3ₚ, 1ₚ, *>","source":"<3ₚ, 2ₚ, ->","id":"<3ₚ, 2ₚ, -> -> <3ₚ, 1ₚ, *>"},{"target":"<3ₚ, 0ₚ, ->","source":"<2ₚ, 0ₚ, ->","id":"<2ₚ, 0ₚ, -> -> <3ₚ, 0ₚ, ->"},{"target":"<3ₚ, 2ₚ, +>","source":"<3ₚ, 2ₚ, *>","id":"<3ₚ, 2ₚ, *> -> <3ₚ, 2ₚ, +>"},{"target":"<t>","source":"<4ₚ, $>","id":"<4ₚ, $> -> <t>"},{"target":"<2ₚ>","source":"<4ₚ, 2ₚ, ->","id":"<4ₚ, 2ₚ, -> -> <2ₚ>"},{"target":"<4ₚ, 1ₚ, +>","source":"<4ₚ, 1ₚ, ->","id":"<4ₚ, 1ₚ, -> -> <4ₚ, 1ₚ, +>"},{"target":"<3ₚ, 0ₚ, +>","source":"<3ₚ, 0ₚ, ->","id":"<3ₚ, 0ₚ, -> -> <3ₚ, 0ₚ, +>"},{"target":"<1ₚ, 1ₚ, +>","source":"<1ₚ, 1ₚ, *>","id":"<1ₚ, 1ₚ, *> -> <1ₚ, 1ₚ, +>"},{"target":"<3ₚ, 2ₚ, *>","source":"<3ₚ, $>","id":"<3ₚ, $> -> <3ₚ, 2ₚ, *>"},{"target":"<1ₚ, 1ₚ, *>","source":"<1ₚ, 2ₚ, ->","id":"<1ₚ, 2ₚ, -> -> <1ₚ, 1ₚ, *>"},{"target":"<4ₚ, 0ₚ, +>","source":"<4ₚ, 0ₚ, ->","id":"<4ₚ, 0ₚ, -> -> <4ₚ, 0ₚ, +>"},{"target":"<1ₚ, 2ₚ, ->","source":"<1ₚ, 1ₚ, *>","id":"<1ₚ, 1ₚ, *> -> <1ₚ, 2ₚ, ->"},{"target":"<2ₚ, $>","source":"<2ₚ, 2ₚ, *>","id":"<2ₚ, 2ₚ, *> -> <2ₚ, $>"},{"target":"<2ₚ, 2ₚ, +>","source":"<2ₚ, 2ₚ, *>","id":"<2ₚ, 2ₚ, *> -> <2ₚ, 2ₚ, +>"},{"target":"<3ₚ, 0ₚ, +>","source":"<3ₚ, 1ₚ, ->","id":"<3ₚ, 1ₚ, -> -> <3ₚ, 0ₚ, +>"},{"target":"<1ₚ, $>","source":"<s>","id":"<s> -> <1ₚ, $>"},{"target":"<4ₚ, 2ₚ, *>","source":"<4ₚ, $>","id":"<4ₚ, $> -> <4ₚ, 2ₚ, *>"},{"target":"<2ₚ, 1ₚ, *>","source":"<2ₚ, 2ₚ, ->","id":"<2ₚ, 2ₚ, -> -> <2ₚ, 1ₚ, *>"},{"target":"<3ₚ, 2ₚ, *>","source":"<3ₚ, 2ₚ, +>","id":"<3ₚ, 2ₚ, +> -> <3ₚ, 2ₚ, *>"},{"target":"<4ₚ, 0ₚ, ->","source":"<3ₚ, $>","id":"<3ₚ, $> -> <4ₚ, 0ₚ, ->"},{"target":"<2ₚ>","source":"<1ₚ, 2ₚ, +>","id":"<1ₚ, 2ₚ, +> -> <2ₚ>"},{"target":"<2ₚ, $>","source":"<1ₚ, 0ₚ, ->","id":"<1ₚ, 0ₚ, -> -> <2ₚ, $>"},{"target":"<3ₚ, 2ₚ, ->","source":"<2ₚ>","id":"<2ₚ> -> <3ₚ, 2ₚ, ->"}]};
+window.graphData = data;
+const svg = document.getElementById('graph');
+const viewBox = data.viewBox;
+svg.setAttribute('viewBox', `${viewBox.minX} ${viewBox.minY} ${viewBox.width} ${viewBox.height}`);
+const edgeById = new Map(data.edges.map(e => [e.id, e]));
+const nodeById = new Map(data.nodes.map(n => [n.id, n]));
+const steps = data.steps;
+const slider = document.getElementById('slider');
+slider.max = steps.length;
+let stepIndex = 0;
+const activeNodes = new Set();
+const activeEdges = new Set();
+const edgeEls = new Map();
+const nodeEls = new Map();
+let dragging = null;
+function buildDefs() {
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+  marker.setAttribute('id', 'arrow');
+  marker.setAttribute('markerWidth', '10');
+  marker.setAttribute('markerHeight', '8');
+  marker.setAttribute('refX', '9');
+  marker.setAttribute('refY', '4');
+  marker.setAttribute('orient', 'auto');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', 'M0,0 L10,4 L0,8 Z');
+  path.setAttribute('fill', '#4b4b4b');
+  marker.appendChild(path);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+}
+function render() {
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  buildDefs();
+  edgeEls.clear();
+  nodeEls.clear();
+  for (const edgeId of activeEdges) {
+    const edge = edgeById.get(edgeId);
+    if (!edge) continue;
+    const u = nodeById.get(edge.source);
+    const v = nodeById.get(edge.target);
+    if (!u || !v) continue;
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', u.x);
+    line.setAttribute('y1', u.y);
+    line.setAttribute('x2', v.x);
+    line.setAttribute('y2', v.y);
+    line.setAttribute('class', 'edge');
+    line.setAttribute('marker-end', 'url(#arrow)');
+    svg.appendChild(line);
+    edgeEls.set(edgeId, line);
+  }
+  for (const nodeId of activeNodes) {
+    const node = nodeById.get(nodeId);
+    if (!node) continue;
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', node.x);
+    circle.setAttribute('cy', node.y);
+    circle.setAttribute('r', 10);
+    circle.setAttribute('class', `node ${node.kind}`);
+    circle.dataset.nodeId = nodeId;
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', node.x + 14);
+    label.setAttribute('y', node.y + 4);
+    label.setAttribute('class', 'label');
+    label.dataset.nodeId = nodeId;
+    label.textContent = node.label;
+    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    title.textContent = node.label;
+    circle.appendChild(title);
+    group.appendChild(circle);
+    group.appendChild(label);
+    svg.appendChild(group);
+    nodeEls.set(nodeId, { circle, label });
+  }
+  document.getElementById('stats').textContent = `Step ${stepIndex}/${steps.length} | Nodes ${activeNodes.size} | Edges ${activeEdges.size}`;
+}
+function svgPoint(evt) {
+  const pt = svg.createSVGPoint();
+  pt.x = evt.clientX;
+  pt.y = evt.clientY;
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return { x: 0, y: 0 };
+  const res = pt.matrixTransform(ctm.inverse());
+  return { x: res.x, y: res.y };
+}
+function updateNodePosition(nodeId, x, y) {
+  const node = nodeById.get(nodeId);
+  if (!node) return;
+  node.x = x;
+  node.y = y;
+  const el = nodeEls.get(nodeId);
+  if (el) {
+    el.circle.setAttribute('cx', x);
+    el.circle.setAttribute('cy', y);
+    el.label.setAttribute('x', x + 14);
+    el.label.setAttribute('y', y + 4);
+  }
+  for (const [edgeId, edge] of edgeById.entries()) {
+    if (!activeEdges.has(edgeId)) continue;
+    if (edge.source !== nodeId && edge.target !== nodeId) continue;
+    const u = nodeById.get(edge.source);
+    const v = nodeById.get(edge.target);
+    const line = edgeEls.get(edgeId);
+    if (line && u && v) {
+      line.setAttribute('x1', u.x);
+      line.setAttribute('y1', u.y);
+      line.setAttribute('x2', v.x);
+      line.setAttribute('y2', v.y);
+    }
+  }
+}
+function setStep(next) {
+  stepIndex = Math.max(0, Math.min(next, steps.length));
+  activeNodes.clear();
+  activeEdges.clear();
+  for (let i = 0; i < stepIndex; i++) {
+    for (const n of steps[i].addNodes) activeNodes.add(n);
+    for (const e of steps[i].addEdges) activeEdges.add(e);
+  }
+  slider.value = stepIndex;
+  render();
+}
+document.getElementById('back').addEventListener('click', () => setStep(stepIndex - 1));
+document.getElementById('forward').addEventListener('click', () => setStep(stepIndex + 1));
+slider.addEventListener('input', (evt) => setStep(parseInt(evt.target.value, 10)));
+svg.addEventListener('pointerdown', (evt) => {
+  const target = evt.target;
+  if (!target || !target.dataset) return;
+  const nodeId = target.dataset.nodeId;
+  if (!nodeId || !activeNodes.has(nodeId)) return;
+  dragging = nodeId;
+  target.classList.add('dragging');
+  svg.setPointerCapture(evt.pointerId);
+});
+svg.addEventListener('pointermove', (evt) => {
+  if (!dragging) return;
+  const pos = svgPoint(evt);
+  updateNodePosition(dragging, pos.x, pos.y);
+});
+svg.addEventListener('pointerup', (evt) => {
+  if (!dragging) return;
+  const el = nodeEls.get(dragging);
+  if (el) el.circle.classList.remove('dragging');
+  dragging = null;
+  svg.releasePointerCapture(evt.pointerId);
+});
+setStep(0);
+</script>
+</body>
+</html>
