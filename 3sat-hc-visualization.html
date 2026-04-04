@@ -5,26 +5,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>3SAT -> Hamiltonian Cycle</title>
 <style>
-  :root { --bg: #f6f3ea; --ink: #1b1b1b; --accent: #0d5c63; --edge: #4b4b4b; }
+  :root { --bg: #f6f3ea; --ink: #1b1b1b; --edge: #4b4b4b; }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body { margin: 0; font-family: Georgia, serif; background: var(--bg); color: var(--ink); }
   header { padding: 16px 20px; border-bottom: 2px solid #222; background: #f0eadc; }
   header h1 { margin: 0; font-size: 20px; letter-spacing: 0.5px; }
-  #app { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+  #app { display: flex; flex-direction: column; height: 100vh; }
   .toolbar { display: flex; gap: 8px; align-items: center; padding: 12px 20px; background: #efe7d6; border-bottom: 1px solid #c7bea8; }
   .toolbar button { border: 1px solid #1b1b1b; background: #fff6dd; padding: 6px 10px; cursor: pointer; }
   .toolbar input[type=range] { width: 220px; }
   .stats { margin-left: auto; font-size: 13px; }
-  #graph { width: 100%; height: 100%; background: radial-gradient(circle at 20% 10%, #fff 0%, #f6f3ea 60%, #efe5d0 100%); }
-  .edge { stroke: var(--edge); stroke-width: 1.4; opacity: 0.7; }
-  .node { stroke: #111; stroke-width: 1; cursor: grab; }
-  .node.dragging { cursor: grabbing; }
-  .node.var { fill: #f7b32b; }
-  .node.var-tail { fill: #f6ae2d; }
-  .node.clause { fill: #f9564f; }
-  .node.terminal { fill: #0d5c63; }
-  .node.other { fill: #c0c0c0; }
-  .label { font-size: 11px; pointer-events: none; fill: #1b1b1b; }
+  .debug { font-size: 11px; color: #6b6455; }
+  #graph { flex: 1 1 auto; width: 100%; min-height: 420px; background: radial-gradient(circle at 20% 10%, #fff 0%, #f6f3ea 60%, #efe5d0 100%); }
 </style>
 </head>
 <body>
@@ -33,126 +26,65 @@
   <div class="toolbar">
     <button id="back">Prev</button>
     <button id="forward">Next</button>
+    <button id="layout">Layout</button>
     <input id="slider" type="range" min="0" value="0">
     <div class="stats" id="stats"></div>
+    <div class="debug" id="debug"></div>
   </div>
-  <svg id="graph" aria-label="graph visualization"></svg>
+  <div id="graph" aria-label="graph visualization"></div>
 </div>
+<script src="/home/pfingsbr/Research/karp/vendor/cytoscape.min.js"></script>
 <script>
-const data = {"nodes":[{"kind":"var","label":"<2ₚ, 0ₚ, +>","j":0,"x":0,"y":198,"i":2,"id":"<2ₚ, 0ₚ, +>","tag":"+"},{"kind":"var-tail","label":"<2ₚ, $>","j":3,"x":660,"y":198,"i":2,"id":"<2ₚ, $>","tag":"$"},{"kind":"var","label":"<1ₚ, 2ₚ, ->","j":2,"x":440,"y":90,"i":1,"id":"<1ₚ, 2ₚ, ->","tag":"-"},{"kind":"var","label":"<4ₚ, 1ₚ, +>","j":1,"x":220,"y":378,"i":4,"id":"<4ₚ, 1ₚ, +>","tag":"+"},{"kind":"var","label":"<3ₚ, 1ₚ, +>","j":1,"x":220,"y":288,"i":3,"id":"<3ₚ, 1ₚ, +>","tag":"+"},{"kind":"var","label":"<3ₚ, 1ₚ, *>","j":1,"x":220,"y":306,"i":3,"id":"<3ₚ, 1ₚ, *>","tag":"*"},{"kind":"var","label":"<2ₚ, 2ₚ, *>","j":2,"x":440,"y":216,"i":2,"id":"<2ₚ, 2ₚ, *>","tag":"*"},{"kind":"var","label":"<1ₚ, 2ₚ, *>","j":2,"x":440,"y":126,"i":1,"id":"<1ₚ, 2ₚ, *>","tag":"*"},{"kind":"var","label":"<3ₚ, 2ₚ, ->","j":2,"x":440,"y":270,"i":3,"id":"<3ₚ, 2ₚ, ->","tag":"-"},{"kind":"var-tail","label":"<3ₚ, $>","j":3,"x":660,"y":288,"i":3,"id":"<3ₚ, $>","tag":"$"},{"kind":"var","label":"<2ₚ, 2ₚ, ->","j":2,"x":440,"y":180,"i":2,"id":"<2ₚ, 2ₚ, ->","tag":"-"},{"kind":"var","label":"<2ₚ, 1ₚ, +>","j":1,"x":220,"y":198,"i":2,"id":"<2ₚ, 1ₚ, +>","tag":"+"},{"kind":"var","label":"<2ₚ, 2ₚ, +>","j":2,"x":440,"y":198,"i":2,"id":"<2ₚ, 2ₚ, +>","tag":"+"},{"kind":"var","label":"<1ₚ, 2ₚ, +>","j":2,"x":440,"y":108,"i":1,"id":"<1ₚ, 2ₚ, +>","tag":"+"},{"kind":"var","label":"<1ₚ, 0ₚ, ->","j":0,"x":0,"y":90,"i":1,"id":"<1ₚ, 0ₚ, ->","tag":"-"},{"kind":"var","label":"<1ₚ, 0ₚ, +>","j":0,"x":0,"y":108,"i":1,"id":"<1ₚ, 0ₚ, +>","tag":"+"},{"kind":"terminal","label":"<s>","j":false,"x":-220,"y":468,"i":false,"id":"<s>","tag":"s"},{"kind":"var","label":"<3ₚ, 0ₚ, ->","j":0,"x":0,"y":270,"i":3,"id":"<3ₚ, 0ₚ, ->","tag":"-"},{"kind":"var-tail","label":"<1ₚ, $>","j":3,"x":660,"y":108,"i":1,"id":"<1ₚ, $>","tag":"$"},{"kind":"var","label":"<1ₚ, 1ₚ, ->","j":1,"x":220,"y":90,"i":1,"id":"<1ₚ, 1ₚ, ->","tag":"-"},{"kind":"terminal","label":"<t>","j":false,"x":880,"y":468,"i":false,"id":"<t>","tag":"t"},{"kind":"var","label":"<4ₚ, 0ₚ, ->","j":0,"x":0,"y":360,"i":4,"id":"<4ₚ, 0ₚ, ->","tag":"-"},{"kind":"var","label":"<4ₚ, 2ₚ, +>","j":2,"x":440,"y":378,"i":4,"id":"<4ₚ, 2ₚ, +>","tag":"+"},{"kind":"var","label":"<2ₚ, 1ₚ, *>","j":1,"x":220,"y":216,"i":2,"id":"<2ₚ, 1ₚ, *>","tag":"*"},{"kind":"var","label":"<1ₚ, 1ₚ, +>","j":1,"x":220,"y":108,"i":1,"id":"<1ₚ, 1ₚ, +>","tag":"+"},{"kind":"var","label":"<3ₚ, 2ₚ, +>","j":2,"x":440,"y":288,"i":3,"id":"<3ₚ, 2ₚ, +>","tag":"+"},{"kind":"var","label":"<2ₚ, 1ₚ, ->","j":1,"x":220,"y":180,"i":2,"id":"<2ₚ, 1ₚ, ->","tag":"-"},{"kind":"var","label":"<4ₚ, 0ₚ, +>","j":0,"x":0,"y":378,"i":4,"id":"<4ₚ, 0ₚ, +>","tag":"+"},{"kind":"var","label":"<1ₚ, 1ₚ, *>","j":1,"x":220,"y":126,"i":1,"id":"<1ₚ, 1ₚ, *>","tag":"*"},{"kind":"var-tail","label":"<4ₚ, $>","j":3,"x":660,"y":378,"i":4,"id":"<4ₚ, $>","tag":"$"},{"kind":"var","label":"<3ₚ, 2ₚ, *>","j":2,"x":440,"y":306,"i":3,"id":"<3ₚ, 2ₚ, *>","tag":"*"},{"kind":"var","label":"<2ₚ, 0ₚ, ->","j":0,"x":0,"y":180,"i":2,"id":"<2ₚ, 0ₚ, ->","tag":"-"},{"kind":"clause","label":"<1ₚ>","j":1,"x":220,"y":18,"i":false,"id":"<1ₚ>","tag":false},{"kind":"var","label":"<4ₚ, 2ₚ, *>","j":2,"x":440,"y":396,"i":4,"id":"<4ₚ, 2ₚ, *>","tag":"*"},{"kind":"var","label":"<4ₚ, 1ₚ, ->","j":1,"x":220,"y":360,"i":4,"id":"<4ₚ, 1ₚ, ->","tag":"-"},{"kind":"clause","label":"<2ₚ>","j":2,"x":440,"y":18,"i":false,"id":"<2ₚ>","tag":false},{"kind":"var","label":"<4ₚ, 2ₚ, ->","j":2,"x":440,"y":360,"i":4,"id":"<4ₚ, 2ₚ, ->","tag":"-"},{"kind":"var","label":"<4ₚ, 1ₚ, *>","j":1,"x":220,"y":396,"i":4,"id":"<4ₚ, 1ₚ, *>","tag":"*"},{"kind":"var","label":"<3ₚ, 1ₚ, ->","j":1,"x":220,"y":270,"i":3,"id":"<3ₚ, 1ₚ, ->","tag":"-"},{"kind":"var","label":"<3ₚ, 0ₚ, +>","j":0,"x":0,"y":288,"i":3,"id":"<3ₚ, 0ₚ, +>","tag":"+"}],"steps":[{"addNodes":["<1ₚ, 0ₚ, ->"],"addEdges":[]},{"addNodes":["<2ₚ, 0ₚ, ->"],"addEdges":[]},{"addNodes":["<3ₚ, 0ₚ, ->"],"addEdges":[]},{"addNodes":["<4ₚ, 0ₚ, ->"],"addEdges":[]},{"addNodes":["<2ₚ, 0ₚ, +>","<4ₚ, 0ₚ, +>","<1ₚ, 0ₚ, +>","<3ₚ, 0ₚ, +>"],"addEdges":[]},{"addNodes":["<2ₚ, $>","<4ₚ, $>","<1ₚ, $>","<3ₚ, $>"],"addEdges":[]},{"addNodes":["<3ₚ, 1ₚ, ->","<1ₚ, 2ₚ, ->","<1ₚ, 1ₚ, ->","<3ₚ, 2ₚ, ->","<4ₚ, 2ₚ, ->","<4ₚ, 1ₚ, ->","<2ₚ, 2ₚ, ->","<2ₚ, 1ₚ, ->"],"addEdges":[]},{"addNodes":["<2ₚ, 2ₚ, +>","<4ₚ, 1ₚ, +>","<2ₚ, 1ₚ, +>","<3ₚ, 2ₚ, +>","<1ₚ, 2ₚ, +>","<1ₚ, 1ₚ, +>","<4ₚ, 2ₚ, +>","<3ₚ, 1ₚ, +>"],"addEdges":[]},{"addNodes":["<4ₚ, 1ₚ, *>","<1ₚ, 2ₚ, *>","<3ₚ, 2ₚ, *>","<4ₚ, 2ₚ, *>","<1ₚ, 1ₚ, *>","<2ₚ, 2ₚ, *>","<3ₚ, 1ₚ, *>","<2ₚ, 1ₚ, *>"],"addEdges":[]},{"addNodes":["<1ₚ>","<2ₚ>"],"addEdges":[]},{"addNodes":["<t>","<s>"],"addEdges":[]},{"addNodes":[],"addEdges":["<1ₚ, 0ₚ, +> -> <1ₚ, 0ₚ, ->","<2ₚ, 2ₚ, *> -> <2ₚ, $>","<2ₚ, 0ₚ, +> -> <2ₚ, 1ₚ, ->","<1ₚ, 1ₚ, -> -> <1ₚ, 0ₚ, +>","<4ₚ, 1ₚ, -> -> <4ₚ, 0ₚ, +>","<2ₚ, $> -> <2ₚ, 2ₚ, *>","<1ₚ, 2ₚ, *> -> <1ₚ, $>","<4ₚ, 2ₚ, *> -> <4ₚ, $>","<4ₚ, $> -> <4ₚ, 2ₚ, *>","<3ₚ, 0ₚ, +> -> <3ₚ, 1ₚ, ->","<3ₚ, 0ₚ, -> -> <3ₚ, 0ₚ, +>","<3ₚ, 1ₚ, -> -> <3ₚ, 0ₚ, +>","<4ₚ, 0ₚ, +> -> <4ₚ, 0ₚ, ->","<2ₚ, 1ₚ, -> -> <2ₚ, 0ₚ, +>","<1ₚ, 0ₚ, -> -> <1ₚ, 0ₚ, +>","<4ₚ, 0ₚ, -> -> <4ₚ, 0ₚ, +>","<3ₚ, 0ₚ, +> -> <3ₚ, 0ₚ, ->","<4ₚ, 0ₚ, +> -> <4ₚ, 1ₚ, ->","<1ₚ, $> -> <1ₚ, 2ₚ, *>","<2ₚ, 0ₚ, -> -> <2ₚ, 0ₚ, +>","<3ₚ, $> -> <3ₚ, 2ₚ, *>","<3ₚ, 2ₚ, *> -> <3ₚ, $>","<2ₚ, 0ₚ, +> -> <2ₚ, 0ₚ, ->","<1ₚ, 0ₚ, +> -> <1ₚ, 1ₚ, ->"]},{"addNodes":[],"addEdges":["<1ₚ, 1ₚ, +> -> <1ₚ, 1ₚ, ->","<1ₚ, 2ₚ, -> -> <1ₚ, 2ₚ, +>","<4ₚ, 1ₚ, *> -> <4ₚ, 1ₚ, +>","<4ₚ, 1ₚ, +> -> <4ₚ, 1ₚ, *>","<2ₚ, 1ₚ, +> -> <2ₚ, 1ₚ, *>","<2ₚ, 2ₚ, +> -> <2ₚ, 2ₚ, *>","<4ₚ, 1ₚ, -> -> <4ₚ, 1ₚ, +>","<2ₚ, 2ₚ, -> -> <2ₚ, 2ₚ, +>","<3ₚ, 2ₚ, +> -> <3ₚ, 2ₚ, *>","<4ₚ, 2ₚ, *> -> <4ₚ, 2ₚ, +>","<3ₚ, 1ₚ, -> -> <3ₚ, 1ₚ, +>","<3ₚ, 2ₚ, -> -> <3ₚ, 2ₚ, +>","<4ₚ, 2ₚ, +> -> <4ₚ, 2ₚ, *>","<1ₚ, 2ₚ, +> -> <1ₚ, 2ₚ, *>","<3ₚ, 2ₚ, +> -> <3ₚ, 2ₚ, ->","<2ₚ, 2ₚ, +> -> <2ₚ, 2ₚ, ->","<1ₚ, 2ₚ, +> -> <1ₚ, 2ₚ, ->","<2ₚ, 1ₚ, +> -> <2ₚ, 1ₚ, ->","<1ₚ, 2ₚ, *> -> <1ₚ, 2ₚ, +>","<2ₚ, 1ₚ, *> -> <2ₚ, 1ₚ, +>","<4ₚ, 2ₚ, -> -> <4ₚ, 2ₚ, +>","<3ₚ, 1ₚ, +> -> <3ₚ, 1ₚ, ->","<4ₚ, 2ₚ, +> -> <4ₚ, 2ₚ, ->","<1ₚ, 1ₚ, -> -> <1ₚ, 1ₚ, +>","<2ₚ, 1ₚ, -> -> <2ₚ, 1ₚ, +>","<1ₚ, 1ₚ, *> -> <1ₚ, 1ₚ, +>","<3ₚ, 2ₚ, *> -> <3ₚ, 2ₚ, +>","<3ₚ, 1ₚ, *> -> <3ₚ, 1ₚ, +>","<2ₚ, 2ₚ, *> -> <2ₚ, 2ₚ, +>","<4ₚ, 1ₚ, +> -> <4ₚ, 1ₚ, ->","<1ₚ, 1ₚ, +> -> <1ₚ, 1ₚ, *>","<3ₚ, 1ₚ, +> -> <3ₚ, 1ₚ, *>"]},{"addNodes":[],"addEdges":["<3ₚ, 1ₚ, *> -> <3ₚ, 2ₚ, ->","<2ₚ, 1ₚ, *> -> <2ₚ, 2ₚ, ->","<1ₚ, 1ₚ, *> -> <1ₚ, 2ₚ, ->","<4ₚ, 1ₚ, *> -> <4ₚ, 2ₚ, ->"]},{"addNodes":[],"addEdges":["<3ₚ, 2ₚ, -> -> <3ₚ, 1ₚ, *>","<4ₚ, 2ₚ, -> -> <4ₚ, 1ₚ, *>","<2ₚ, 2ₚ, -> -> <2ₚ, 1ₚ, *>","<1ₚ, 2ₚ, -> -> <1ₚ, 1ₚ, *>"]},{"addNodes":[],"addEdges":["<3ₚ, $> -> <4ₚ, 0ₚ, ->","<2ₚ, $> -> <3ₚ, $>","<1ₚ, $> -> <2ₚ, $>","<3ₚ, $> -> <4ₚ, $>","<1ₚ, 0ₚ, -> -> <2ₚ, $>","<3ₚ, 0ₚ, -> -> <4ₚ, 0ₚ, ->","<2ₚ, 0ₚ, -> -> <3ₚ, 0ₚ, ->","<2ₚ, $> -> <3ₚ, 0ₚ, ->","<2ₚ, 0ₚ, -> -> <3ₚ, $>","<1ₚ, $> -> <2ₚ, 0ₚ, ->","<3ₚ, 0ₚ, -> -> <4ₚ, $>","<1ₚ, 0ₚ, -> -> <2ₚ, 0ₚ, ->"]},{"addNodes":[],"addEdges":["<s> -> <1ₚ, 0ₚ, ->","<s> -> <1ₚ, $>"]},{"addNodes":[],"addEdges":["<4ₚ, 0ₚ, -> -> <t>","<4ₚ, $> -> <t>"]},{"addNodes":[],"addEdges":["<t> -> <s>"]},{"addNodes":[],"addEdges":["<2ₚ> -> <4ₚ, 2ₚ, +>","<1ₚ> -> <1ₚ, 1ₚ, +>","<1ₚ, 1ₚ, -> -> <1ₚ>","<4ₚ, 2ₚ, -> -> <2ₚ>","<1ₚ> -> <3ₚ, 1ₚ, +>","<3ₚ, 1ₚ, -> -> <1ₚ>","<1ₚ> -> <2ₚ, 1ₚ, +>","<2ₚ, 1ₚ, -> -> <1ₚ>"]},{"addNodes":[],"addEdges":["<3ₚ, 2ₚ, +> -> <2ₚ>","<1ₚ, 2ₚ, +> -> <2ₚ>","<2ₚ> -> <3ₚ, 2ₚ, ->","<2ₚ> -> <1ₚ, 2ₚ, ->"]}],"viewBox":{"width":1260,"height":610,"minY":-62,"minX":-300},"edges":[{"target":"<4ₚ, 2ₚ, ->","source":"<4ₚ, 2ₚ, +>","id":"<4ₚ, 2ₚ, +> -> <4ₚ, 2ₚ, ->"},{"target":"<1ₚ, 0ₚ, ->","source":"<s>","id":"<s> -> <1ₚ, 0ₚ, ->"},{"target":"<2ₚ, 2ₚ, +>","source":"<2ₚ, 2ₚ, ->","id":"<2ₚ, 2ₚ, -> -> <2ₚ, 2ₚ, +>"},{"target":"<1ₚ, 1ₚ, ->","source":"<1ₚ, 0ₚ, +>","id":"<1ₚ, 0ₚ, +> -> <1ₚ, 1ₚ, ->"},{"target":"<1ₚ, 2ₚ, *>","source":"<1ₚ, 2ₚ, +>","id":"<1ₚ, 2ₚ, +> -> <1ₚ, 2ₚ, *>"},{"target":"<4ₚ, 2ₚ, +>","source":"<4ₚ, 2ₚ, ->","id":"<4ₚ, 2ₚ, -> -> <4ₚ, 2ₚ, +>"},{"target":"<3ₚ, $>","source":"<2ₚ, $>","id":"<2ₚ, $> -> <3ₚ, $>"},{"target":"<4ₚ, 0ₚ, +>","source":"<4ₚ, 1ₚ, ->","id":"<4ₚ, 1ₚ, -> -> <4ₚ, 0ₚ, +>"},{"target":"<4ₚ, 2ₚ, *>","source":"<4ₚ, 2ₚ, +>","id":"<4ₚ, 2ₚ, +> -> <4ₚ, 2ₚ, *>"},{"target":"<3ₚ, $>","source":"<3ₚ, 2ₚ, *>","id":"<3ₚ, 2ₚ, *> -> <3ₚ, $>"},{"target":"<4ₚ, $>","source":"<4ₚ, 2ₚ, *>","id":"<4ₚ, 2ₚ, *> -> <4ₚ, $>"},{"target":"<s>","source":"<t>","id":"<t> -> <s>"},{"target":"<3ₚ, 2ₚ, ->","source":"<3ₚ, 2ₚ, +>","id":"<3ₚ, 2ₚ, +> -> <3ₚ, 2ₚ, ->"},{"target":"<2ₚ, 1ₚ, +>","source":"<2ₚ, 1ₚ, *>","id":"<2ₚ, 1ₚ, *> -> <2ₚ, 1ₚ, +>"},{"target":"<2ₚ>","source":"<3ₚ, 2ₚ, +>","id":"<3ₚ, 2ₚ, +> -> <2ₚ>"},{"target":"<3ₚ, 1ₚ, +>","source":"<1ₚ>","id":"<1ₚ> -> <3ₚ, 1ₚ, +>"},{"target":"<1ₚ>","source":"<1ₚ, 1ₚ, ->","id":"<1ₚ, 1ₚ, -> -> <1ₚ>"},{"target":"<2ₚ, 2ₚ, *>","source":"<2ₚ, 2ₚ, +>","id":"<2ₚ, 2ₚ, +> -> <2ₚ, 2ₚ, *>"},{"target":"<3ₚ, 0ₚ, ->","source":"<2ₚ, $>","id":"<2ₚ, $> -> <3ₚ, 0ₚ, ->"},{"target":"<3ₚ, 1ₚ, ->","source":"<3ₚ, 0ₚ, +>","id":"<3ₚ, 0ₚ, +> -> <3ₚ, 1ₚ, ->"},{"target":"<2ₚ, 1ₚ, *>","source":"<2ₚ, 1ₚ, +>","id":"<2ₚ, 1ₚ, +> -> <2ₚ, 1ₚ, *>"},{"target":"<1ₚ, $>","source":"<1ₚ, 2ₚ, *>","id":"<1ₚ, 2ₚ, *> -> <1ₚ, $>"},{"target":"<4ₚ, 0ₚ, ->","source":"<3ₚ, 0ₚ, ->","id":"<3ₚ, 0ₚ, -> -> <4ₚ, 0ₚ, ->"},{"target":"<4ₚ, 0ₚ, ->","source":"<4ₚ, 0ₚ, +>","id":"<4ₚ, 0ₚ, +> -> <4ₚ, 0ₚ, ->"},{"target":"<3ₚ, 1ₚ, +>","source":"<3ₚ, 1ₚ, *>","id":"<3ₚ, 1ₚ, *> -> <3ₚ, 1ₚ, +>"},{"target":"<1ₚ, 2ₚ, ->","source":"<1ₚ, 2ₚ, +>","id":"<1ₚ, 2ₚ, +> -> <1ₚ, 2ₚ, ->"},{"target":"<4ₚ, 1ₚ, ->","source":"<4ₚ, 1ₚ, +>","id":"<4ₚ, 1ₚ, +> -> <4ₚ, 1ₚ, ->"},{"target":"<4ₚ, 2ₚ, ->","source":"<4ₚ, 1ₚ, *>","id":"<4ₚ, 1ₚ, *> -> <4ₚ, 2ₚ, ->"},{"target":"<3ₚ, 2ₚ, +>","source":"<3ₚ, 2ₚ, ->","id":"<3ₚ, 2ₚ, -> -> <3ₚ, 2ₚ, +>"},{"target":"<1ₚ, 1ₚ, +>","source":"<1ₚ>","id":"<1ₚ> -> <1ₚ, 1ₚ, +>"},{"target":"<2ₚ, 0ₚ, +>","source":"<2ₚ, 1ₚ, ->","id":"<2ₚ, 1ₚ, -> -> <2ₚ, 0ₚ, +>"},{"target":"<4ₚ, 1ₚ, *>","source":"<4ₚ, 1ₚ, +>","id":"<4ₚ, 1ₚ, +> -> <4ₚ, 1ₚ, *>"},{"target":"<4ₚ, 1ₚ, *>","source":"<4ₚ, 2ₚ, ->","id":"<4ₚ, 2ₚ, -> -> <4ₚ, 1ₚ, *>"},{"target":"<1ₚ, 0ₚ, ->","source":"<1ₚ, 0ₚ, +>","id":"<1ₚ, 0ₚ, +> -> <1ₚ, 0ₚ, ->"},{"target":"<1ₚ, 1ₚ, +>","source":"<1ₚ, 1ₚ, ->","id":"<1ₚ, 1ₚ, -> -> <1ₚ, 1ₚ, +>"},{"target":"<4ₚ, 2ₚ, +>","source":"<2ₚ>","id":"<2ₚ> -> <4ₚ, 2ₚ, +>"},{"target":"<2ₚ, $>","source":"<1ₚ, $>","id":"<1ₚ, $> -> <2ₚ, $>"},{"target":"<2ₚ, 2ₚ, ->","source":"<2ₚ, 1ₚ, *>","id":"<2ₚ, 1ₚ, *> -> <2ₚ, 2ₚ, ->"},{"target":"<2ₚ, 0ₚ, ->","source":"<2ₚ, 0ₚ, +>","id":"<2ₚ, 0ₚ, +> -> <2ₚ, 0ₚ, ->"},{"target":"<1ₚ, 2ₚ, +>","source":"<1ₚ, 2ₚ, *>","id":"<1ₚ, 2ₚ, *> -> <1ₚ, 2ₚ, +>"},{"target":"<1ₚ>","source":"<3ₚ, 1ₚ, ->","id":"<3ₚ, 1ₚ, -> -> <1ₚ>"},{"target":"<4ₚ, $>","source":"<3ₚ, 0ₚ, ->","id":"<3ₚ, 0ₚ, -> -> <4ₚ, $>"},{"target":"<1ₚ, 1ₚ, ->","source":"<1ₚ, 1ₚ, +>","id":"<1ₚ, 1ₚ, +> -> <1ₚ, 1ₚ, ->"},{"target":"<1ₚ, 0ₚ, +>","source":"<1ₚ, 1ₚ, ->","id":"<1ₚ, 1ₚ, -> -> <1ₚ, 0ₚ, +>"},{"target":"<3ₚ, 0ₚ, ->","source":"<3ₚ, 0ₚ, +>","id":"<3ₚ, 0ₚ, +> -> <3ₚ, 0ₚ, ->"},{"target":"<3ₚ, 2ₚ, ->","source":"<3ₚ, 1ₚ, *>","id":"<3ₚ, 1ₚ, *> -> <3ₚ, 2ₚ, ->"},{"target":"<2ₚ, 1ₚ, ->","source":"<2ₚ, 0ₚ, +>","id":"<2ₚ, 0ₚ, +> -> <2ₚ, 1ₚ, ->"},{"target":"<1ₚ, 2ₚ, ->","source":"<2ₚ>","id":"<2ₚ> -> <1ₚ, 2ₚ, ->"},{"target":"<2ₚ, 0ₚ, ->","source":"<1ₚ, 0ₚ, ->","id":"<1ₚ, 0ₚ, -> -> <2ₚ, 0ₚ, ->"},{"target":"<2ₚ, 2ₚ, *>","source":"<2ₚ, $>","id":"<2ₚ, $> -> <2ₚ, 2ₚ, *>"},{"target":"<3ₚ, 1ₚ, +>","source":"<3ₚ, 1ₚ, ->","id":"<3ₚ, 1ₚ, -> -> <3ₚ, 1ₚ, +>"},{"target":"<1ₚ, 1ₚ, *>","source":"<1ₚ, 1ₚ, +>","id":"<1ₚ, 1ₚ, +> -> <1ₚ, 1ₚ, *>"},{"target":"<t>","source":"<4ₚ, 0ₚ, ->","id":"<4ₚ, 0ₚ, -> -> <t>"},{"target":"<2ₚ, 0ₚ, ->","source":"<1ₚ, $>","id":"<1ₚ, $> -> <2ₚ, 0ₚ, ->"},{"target":"<4ₚ, 1ₚ, +>","source":"<4ₚ, 1ₚ, *>","id":"<4ₚ, 1ₚ, *> -> <4ₚ, 1ₚ, +>"},{"target":"<2ₚ, 0ₚ, +>","source":"<2ₚ, 0ₚ, ->","id":"<2ₚ, 0ₚ, -> -> <2ₚ, 0ₚ, +>"},{"target":"<2ₚ, 1ₚ, +>","source":"<2ₚ, 1ₚ, ->","id":"<2ₚ, 1ₚ, -> -> <2ₚ, 1ₚ, +>"},{"target":"<3ₚ, 1ₚ, *>","source":"<3ₚ, 1ₚ, +>","id":"<3ₚ, 1ₚ, +> -> <3ₚ, 1ₚ, *>"},{"target":"<1ₚ, 2ₚ, *>","source":"<1ₚ, $>","id":"<1ₚ, $> -> <1ₚ, 2ₚ, *>"},{"target":"<2ₚ, 2ₚ, ->","source":"<2ₚ, 2ₚ, +>","id":"<2ₚ, 2ₚ, +> -> <2ₚ, 2ₚ, ->"},{"target":"<4ₚ, $>","source":"<3ₚ, $>","id":"<3ₚ, $> -> <4ₚ, $>"},{"target":"<3ₚ, 1ₚ, ->","source":"<3ₚ, 1ₚ, +>","id":"<3ₚ, 1ₚ, +> -> <3ₚ, 1ₚ, ->"},{"target":"<4ₚ, 1ₚ, ->","source":"<4ₚ, 0ₚ, +>","id":"<4ₚ, 0ₚ, +> -> <4ₚ, 1ₚ, ->"},{"target":"<4ₚ, 2ₚ, +>","source":"<4ₚ, 2ₚ, *>","id":"<4ₚ, 2ₚ, *> -> <4ₚ, 2ₚ, +>"},{"target":"<2ₚ, 1ₚ, +>","source":"<1ₚ>","id":"<1ₚ> -> <2ₚ, 1ₚ, +>"},{"target":"<1ₚ, 2ₚ, +>","source":"<1ₚ, 2ₚ, ->","id":"<1ₚ, 2ₚ, -> -> <1ₚ, 2ₚ, +>"},{"target":"<1ₚ, 0ₚ, +>","source":"<1ₚ, 0ₚ, ->","id":"<1ₚ, 0ₚ, -> -> <1ₚ, 0ₚ, +>"},{"target":"<3ₚ, $>","source":"<2ₚ, 0ₚ, ->","id":"<2ₚ, 0ₚ, -> -> <3ₚ, $>"},{"target":"<1ₚ>","source":"<2ₚ, 1ₚ, ->","id":"<2ₚ, 1ₚ, -> -> <1ₚ>"},{"target":"<2ₚ, 1ₚ, ->","source":"<2ₚ, 1ₚ, +>","id":"<2ₚ, 1ₚ, +> -> <2ₚ, 1ₚ, ->"},{"target":"<3ₚ, 1ₚ, *>","source":"<3ₚ, 2ₚ, ->","id":"<3ₚ, 2ₚ, -> -> <3ₚ, 1ₚ, *>"},{"target":"<3ₚ, 0ₚ, ->","source":"<2ₚ, 0ₚ, ->","id":"<2ₚ, 0ₚ, -> -> <3ₚ, 0ₚ, ->"},{"target":"<3ₚ, 2ₚ, +>","source":"<3ₚ, 2ₚ, *>","id":"<3ₚ, 2ₚ, *> -> <3ₚ, 2ₚ, +>"},{"target":"<t>","source":"<4ₚ, $>","id":"<4ₚ, $> -> <t>"},{"target":"<2ₚ>","source":"<4ₚ, 2ₚ, ->","id":"<4ₚ, 2ₚ, -> -> <2ₚ>"},{"target":"<4ₚ, 1ₚ, +>","source":"<4ₚ, 1ₚ, ->","id":"<4ₚ, 1ₚ, -> -> <4ₚ, 1ₚ, +>"},{"target":"<3ₚ, 0ₚ, +>","source":"<3ₚ, 0ₚ, ->","id":"<3ₚ, 0ₚ, -> -> <3ₚ, 0ₚ, +>"},{"target":"<1ₚ, 1ₚ, +>","source":"<1ₚ, 1ₚ, *>","id":"<1ₚ, 1ₚ, *> -> <1ₚ, 1ₚ, +>"},{"target":"<3ₚ, 2ₚ, *>","source":"<3ₚ, $>","id":"<3ₚ, $> -> <3ₚ, 2ₚ, *>"},{"target":"<1ₚ, 1ₚ, *>","source":"<1ₚ, 2ₚ, ->","id":"<1ₚ, 2ₚ, -> -> <1ₚ, 1ₚ, *>"},{"target":"<4ₚ, 0ₚ, +>","source":"<4ₚ, 0ₚ, ->","id":"<4ₚ, 0ₚ, -> -> <4ₚ, 0ₚ, +>"},{"target":"<1ₚ, 2ₚ, ->","source":"<1ₚ, 1ₚ, *>","id":"<1ₚ, 1ₚ, *> -> <1ₚ, 2ₚ, ->"},{"target":"<2ₚ, $>","source":"<2ₚ, 2ₚ, *>","id":"<2ₚ, 2ₚ, *> -> <2ₚ, $>"},{"target":"<2ₚ, 2ₚ, +>","source":"<2ₚ, 2ₚ, *>","id":"<2ₚ, 2ₚ, *> -> <2ₚ, 2ₚ, +>"},{"target":"<3ₚ, 0ₚ, +>","source":"<3ₚ, 1ₚ, ->","id":"<3ₚ, 1ₚ, -> -> <3ₚ, 0ₚ, +>"},{"target":"<1ₚ, $>","source":"<s>","id":"<s> -> <1ₚ, $>"},{"target":"<4ₚ, 2ₚ, *>","source":"<4ₚ, $>","id":"<4ₚ, $> -> <4ₚ, 2ₚ, *>"},{"target":"<2ₚ, 1ₚ, *>","source":"<2ₚ, 2ₚ, ->","id":"<2ₚ, 2ₚ, -> -> <2ₚ, 1ₚ, *>"},{"target":"<3ₚ, 2ₚ, *>","source":"<3ₚ, 2ₚ, +>","id":"<3ₚ, 2ₚ, +> -> <3ₚ, 2ₚ, *>"},{"target":"<4ₚ, 0ₚ, ->","source":"<3ₚ, $>","id":"<3ₚ, $> -> <4ₚ, 0ₚ, ->"},{"target":"<2ₚ>","source":"<1ₚ, 2ₚ, +>","id":"<1ₚ, 2ₚ, +> -> <2ₚ>"},{"target":"<2ₚ, $>","source":"<1ₚ, 0ₚ, ->","id":"<1ₚ, 0ₚ, -> -> <2ₚ, $>"},{"target":"<3ₚ, 2ₚ, ->","source":"<2ₚ>","id":"<2ₚ> -> <3ₚ, 2ₚ, ->"}]};
+const data = {"nodes":[{"kind":"var","label":"<2ₚ, 0ₚ, +>","j":0,"x":0,"y":198,"i":2,"id":"n12","tag":"+"},{"kind":"var-tail","label":"<2ₚ, $>","j":3,"x":660,"y":198,"i":2,"id":"n11","tag":"$"},{"kind":"var","label":"<1ₚ, 2ₚ, ->","j":2,"x":440,"y":90,"i":1,"id":"n9","tag":"-"},{"kind":"var","label":"<4ₚ, 1ₚ, +>","j":1,"x":220,"y":378,"i":4,"id":"n34","tag":"+"},{"kind":"var","label":"<3ₚ, 1ₚ, +>","j":1,"x":220,"y":288,"i":3,"id":"n25","tag":"+"},{"kind":"var","label":"<3ₚ, 1ₚ, *>","j":1,"x":220,"y":306,"i":3,"id":"n24","tag":"*"},{"kind":"var","label":"<2ₚ, 2ₚ, *>","j":2,"x":440,"y":216,"i":2,"id":"n17","tag":"*"},{"kind":"var","label":"<1ₚ, 2ₚ, *>","j":2,"x":440,"y":126,"i":1,"id":"n7","tag":"*"},{"kind":"var","label":"<3ₚ, 2ₚ, ->","j":2,"x":440,"y":270,"i":3,"id":"n29","tag":"-"},{"kind":"var-tail","label":"<3ₚ, $>","j":3,"x":660,"y":288,"i":3,"id":"n21","tag":"$"},{"kind":"var","label":"<2ₚ, 2ₚ, ->","j":2,"x":440,"y":180,"i":2,"id":"n19","tag":"-"},{"kind":"var","label":"<2ₚ, 1ₚ, +>","j":1,"x":220,"y":198,"i":2,"id":"n15","tag":"+"},{"kind":"var","label":"<2ₚ, 2ₚ, +>","j":2,"x":440,"y":198,"i":2,"id":"n18","tag":"+"},{"kind":"var","label":"<1ₚ, 2ₚ, +>","j":2,"x":440,"y":108,"i":1,"id":"n8","tag":"+"},{"kind":"var","label":"<1ₚ, 0ₚ, ->","j":0,"x":0,"y":90,"i":1,"id":"n3","tag":"-"},{"kind":"var","label":"<1ₚ, 0ₚ, +>","j":0,"x":0,"y":108,"i":1,"id":"n2","tag":"+"},{"kind":"terminal","label":"<s>","j":false,"x":-220,"y":468,"i":false,"id":"n39","tag":"s"},{"kind":"var","label":"<3ₚ, 0ₚ, ->","j":0,"x":0,"y":270,"i":3,"id":"n23","tag":"-"},{"kind":"var-tail","label":"<1ₚ, $>","j":3,"x":660,"y":108,"i":1,"id":"n1","tag":"$"},{"kind":"var","label":"<1ₚ, 1ₚ, ->","j":1,"x":220,"y":90,"i":1,"id":"n6","tag":"-"},{"kind":"terminal","label":"<t>","j":false,"x":880,"y":468,"i":false,"id":"n40","tag":"t"},{"kind":"var","label":"<4ₚ, 0ₚ, ->","j":0,"x":0,"y":360,"i":4,"id":"n32","tag":"-"},{"kind":"var","label":"<4ₚ, 2ₚ, +>","j":2,"x":440,"y":378,"i":4,"id":"n37","tag":"+"},{"kind":"var","label":"<2ₚ, 1ₚ, *>","j":1,"x":220,"y":216,"i":2,"id":"n14","tag":"*"},{"kind":"var","label":"<1ₚ, 1ₚ, +>","j":1,"x":220,"y":108,"i":1,"id":"n5","tag":"+"},{"kind":"var","label":"<3ₚ, 2ₚ, +>","j":2,"x":440,"y":288,"i":3,"id":"n28","tag":"+"},{"kind":"var","label":"<2ₚ, 1ₚ, ->","j":1,"x":220,"y":180,"i":2,"id":"n16","tag":"-"},{"kind":"var","label":"<4ₚ, 0ₚ, +>","j":0,"x":0,"y":378,"i":4,"id":"n31","tag":"+"},{"kind":"var","label":"<1ₚ, 1ₚ, *>","j":1,"x":220,"y":126,"i":1,"id":"n4","tag":"*"},{"kind":"var-tail","label":"<4ₚ, $>","j":3,"x":660,"y":378,"i":4,"id":"n30","tag":"$"},{"kind":"var","label":"<3ₚ, 2ₚ, *>","j":2,"x":440,"y":306,"i":3,"id":"n27","tag":"*"},{"kind":"var","label":"<2ₚ, 0ₚ, ->","j":0,"x":0,"y":180,"i":2,"id":"n13","tag":"-"},{"kind":"clause","label":"<1ₚ>","j":1,"x":220,"y":18,"i":false,"id":"n10","tag":false},{"kind":"var","label":"<4ₚ, 2ₚ, *>","j":2,"x":440,"y":396,"i":4,"id":"n36","tag":"*"},{"kind":"var","label":"<4ₚ, 1ₚ, ->","j":1,"x":220,"y":360,"i":4,"id":"n35","tag":"-"},{"kind":"clause","label":"<2ₚ>","j":2,"x":440,"y":18,"i":false,"id":"n20","tag":false},{"kind":"var","label":"<4ₚ, 2ₚ, ->","j":2,"x":440,"y":360,"i":4,"id":"n38","tag":"-"},{"kind":"var","label":"<4ₚ, 1ₚ, *>","j":1,"x":220,"y":396,"i":4,"id":"n33","tag":"*"},{"kind":"var","label":"<3ₚ, 1ₚ, ->","j":1,"x":220,"y":270,"i":3,"id":"n26","tag":"-"},{"kind":"var","label":"<3ₚ, 0ₚ, +>","j":0,"x":0,"y":288,"i":3,"id":"n22","tag":"+"}],"steps":[{"addNodes":["n3"],"addEdges":[]},{"addNodes":["n13"],"addEdges":[]},{"addNodes":["n23"],"addEdges":[]},{"addNodes":["n32"],"addEdges":[]},{"addNodes":["n12","n31","n2","n22"],"addEdges":[]},{"addNodes":["n11","n30","n1","n21"],"addEdges":[]},{"addNodes":["n26","n9","n6","n29","n38","n35","n19","n16"],"addEdges":[]},{"addNodes":["n18","n34","n15","n28","n8","n5","n37","n25"],"addEdges":[]},{"addNodes":["n33","n7","n27","n36","n4","n17","n24","n14"],"addEdges":[]},{"addNodes":["n10","n20"],"addEdges":[]},{"addNodes":["n40","n39"],"addEdges":[]},{"addNodes":[],"addEdges":["e4","e41","e30","e13","e82","e26","e16","e84","e72","e54","e55","e63","e74","e39","e6","e76","e53","e75","e1","e31","e50","e65","e29","e5"]},{"addNodes":[],"addEdges":["e12","e22","e78","e80","e36","e43","e83","e46","e68","e85","e64","e71","e86","e18","e69","e44","e19","e37","e17","e34","e90","e61","e87","e14","e40","e9","e66","e58","e42","e81","e11","e60"]},{"addNodes":[],"addEdges":["e59","e35","e10","e79"]},{"addNodes":[],"addEdges":["e70","e89","e45","e21"]},{"addNodes":[],"addEdges":["e52","e27","e2","e51","e7","e57","e33","e28","e32","e3","e56","e8"]},{"addNodes":[],"addEdges":["e92","e91"]},{"addNodes":[],"addEdges":["e77","e73"]},{"addNodes":[],"addEdges":["e93"]},{"addNodes":[],"addEdges":["e49","e23","e15","e88","e25","e62","e24","e38"]},{"addNodes":[],"addEdges":["e67","e20","e48","e47"]}],"viewBox":{"width":1260,"height":610,"minY":-62,"minX":-300},"edges":[{"target":"n38","source":"n37","id":"e87"},{"target":"n3","source":"n39","id":"e92"},{"target":"n18","source":"n19","id":"e46"},{"target":"n6","source":"n2","id":"e5"},{"target":"n7","source":"n8","id":"e18"},{"target":"n37","source":"n38","id":"e90"},{"target":"n21","source":"n11","id":"e27"},{"target":"n31","source":"n35","id":"e82"},{"target":"n36","source":"n37","id":"e86"},{"target":"n21","source":"n27","id":"e65"},{"target":"n30","source":"n36","id":"e84"},{"target":"n39","source":"n40","id":"e93"},{"target":"n29","source":"n28","id":"e69"},{"target":"n15","source":"n14","id":"e34"},{"target":"n20","source":"n28","id":"e67"},{"target":"n25","source":"n10","id":"e25"},{"target":"n10","source":"n6","id":"e15"},{"target":"n17","source":"n18","id":"e43"},{"target":"n23","source":"n11","id":"e28"},{"target":"n26","source":"n22","id":"e54"},{"target":"n14","source":"n15","id":"e36"},{"target":"n1","source":"n7","id":"e16"},{"target":"n32","source":"n23","id":"e57"},{"target":"n32","source":"n31","id":"e74"},{"target":"n25","source":"n24","id":"e58"},{"target":"n9","source":"n8","id":"e19"},{"target":"n35","source":"n34","id":"e81"},{"target":"n38","source":"n33","id":"e79"},{"target":"n28","source":"n29","id":"e71"},{"target":"n5","source":"n10","id":"e23"},{"target":"n12","source":"n16","id":"e39"},{"target":"n33","source":"n34","id":"e80"},{"target":"n33","source":"n38","id":"e89"},{"target":"n3","source":"n2","id":"e4"},{"target":"n5","source":"n6","id":"e14"},{"target":"n37","source":"n20","id":"e49"},{"target":"n11","source":"n1","id":"e2"},{"target":"n19","source":"n14","id":"e35"},{"target":"n13","source":"n12","id":"e29"},{"target":"n8","source":"n7","id":"e17"},{"target":"n10","source":"n26","id":"e62"},{"target":"n30","source":"n23","id":"e56"},{"target":"n6","source":"n5","id":"e12"},{"target":"n2","source":"n6","id":"e13"},{"target":"n23","source":"n22","id":"e53"},{"target":"n29","source":"n24","id":"e59"},{"target":"n16","source":"n12","id":"e30"},{"target":"n9","source":"n20","id":"e47"},{"target":"n13","source":"n3","id":"e8"},{"target":"n17","source":"n11","id":"e26"},{"target":"n25","source":"n26","id":"e64"},{"target":"n4","source":"n5","id":"e11"},{"target":"n40","source":"n32","id":"e77"},{"target":"n13","source":"n1","id":"e3"},{"target":"n34","source":"n33","id":"e78"},{"target":"n12","source":"n13","id":"e31"},{"target":"n15","source":"n16","id":"e40"},{"target":"n24","source":"n25","id":"e60"},{"target":"n7","source":"n1","id":"e1"},{"target":"n19","source":"n18","id":"e44"},{"target":"n30","source":"n21","id":"e51"},{"target":"n26","source":"n25","id":"e61"},{"target":"n35","source":"n31","id":"e75"},{"target":"n37","source":"n36","id":"e85"},{"target":"n15","source":"n10","id":"e24"},{"target":"n8","source":"n9","id":"e22"},{"target":"n2","source":"n3","id":"e6"},{"target":"n21","source":"n13","id":"e32"},{"target":"n10","source":"n16","id":"e38"},{"target":"n16","source":"n15","id":"e37"},{"target":"n24","source":"n29","id":"e70"},{"target":"n23","source":"n13","id":"e33"},{"target":"n28","source":"n27","id":"e66"},{"target":"n40","source":"n30","id":"e73"},{"target":"n20","source":"n38","id":"e88"},{"target":"n34","source":"n35","id":"e83"},{"target":"n22","source":"n23","id":"e55"},{"target":"n5","source":"n4","id":"e9"},{"target":"n27","source":"n21","id":"e50"},{"target":"n4","source":"n9","id":"e21"},{"target":"n31","source":"n32","id":"e76"},{"target":"n9","source":"n4","id":"e10"},{"target":"n11","source":"n17","id":"e41"},{"target":"n18","source":"n17","id":"e42"},{"target":"n22","source":"n26","id":"e63"},{"target":"n1","source":"n39","id":"e91"},{"target":"n36","source":"n30","id":"e72"},{"target":"n14","source":"n19","id":"e45"},{"target":"n27","source":"n28","id":"e68"},{"target":"n32","source":"n21","id":"e52"},{"target":"n20","source":"n8","id":"e20"},{"target":"n11","source":"n3","id":"e7"},{"target":"n29","source":"n20","id":"e48"}]};
 window.graphData = data;
-const svg = document.getElementById('graph');
-const viewBox = data.viewBox;
-svg.setAttribute('viewBox', `${viewBox.minX} ${viewBox.minY} ${viewBox.width} ${viewBox.height}`);
-const edgeById = new Map(data.edges.map(e => [e.id, e]));
-const nodeById = new Map(data.nodes.map(n => [n.id, n]));
 const steps = data.steps;
 const slider = document.getElementById('slider');
 slider.max = steps.length;
 let stepIndex = 0;
 const activeNodes = new Set();
 const activeEdges = new Set();
-const edgeEls = new Map();
-const nodeEls = new Map();
-let dragging = null;
-function buildDefs() {
-  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-  const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-  marker.setAttribute('id', 'arrow');
-  marker.setAttribute('markerWidth', '10');
-  marker.setAttribute('markerHeight', '8');
-  marker.setAttribute('refX', '9');
-  marker.setAttribute('refY', '4');
-  marker.setAttribute('orient', 'auto');
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', 'M0,0 L10,4 L0,8 Z');
-  path.setAttribute('fill', '#4b4b4b');
-  marker.appendChild(path);
-  defs.appendChild(marker);
-  svg.appendChild(defs);
-}
-function render() {
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
-  buildDefs();
-  edgeEls.clear();
-  nodeEls.clear();
-  for (const edgeId of activeEdges) {
-    const edge = edgeById.get(edgeId);
-    if (!edge) continue;
-    const u = nodeById.get(edge.source);
-    const v = nodeById.get(edge.target);
-    if (!u || !v) continue;
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', u.x);
-    line.setAttribute('y1', u.y);
-    line.setAttribute('x2', v.x);
-    line.setAttribute('y2', v.y);
-    line.setAttribute('class', 'edge');
-    line.setAttribute('marker-end', 'url(#arrow)');
-    svg.appendChild(line);
-    edgeEls.set(edgeId, line);
-  }
-  for (const nodeId of activeNodes) {
-    const node = nodeById.get(nodeId);
-    if (!node) continue;
-    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('cx', node.x);
-    circle.setAttribute('cy', node.y);
-    circle.setAttribute('r', 10);
-    circle.setAttribute('class', `node ${node.kind}`);
-    circle.dataset.nodeId = nodeId;
-    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    label.setAttribute('x', node.x + 14);
-    label.setAttribute('y', node.y + 4);
-    label.setAttribute('class', 'label');
-    label.dataset.nodeId = nodeId;
-    label.textContent = node.label;
-    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-    title.textContent = node.label;
-    circle.appendChild(title);
-    group.appendChild(circle);
-    group.appendChild(label);
-    svg.appendChild(group);
-    nodeEls.set(nodeId, { circle, label });
-  }
-  document.getElementById('stats').textContent = `Step ${stepIndex}/${steps.length} | Nodes ${activeNodes.size} | Edges ${activeEdges.size}`;
-}
-function svgPoint(evt) {
-  const pt = svg.createSVGPoint();
-  pt.x = evt.clientX;
-  pt.y = evt.clientY;
-  const ctm = svg.getScreenCTM();
-  if (!ctm) return { x: 0, y: 0 };
-  const res = pt.matrixTransform(ctm.inverse());
-  return { x: res.x, y: res.y };
-}
-function updateNodePosition(nodeId, x, y) {
-  const node = nodeById.get(nodeId);
-  if (!node) return;
-  node.x = x;
-  node.y = y;
-  const el = nodeEls.get(nodeId);
-  if (el) {
-    el.circle.setAttribute('cx', x);
-    el.circle.setAttribute('cy', y);
-    el.label.setAttribute('x', x + 14);
-    el.label.setAttribute('y', y + 4);
-  }
-  for (const [edgeId, edge] of edgeById.entries()) {
-    if (!activeEdges.has(edgeId)) continue;
-    if (edge.source !== nodeId && edge.target !== nodeId) continue;
-    const u = nodeById.get(edge.source);
-    const v = nodeById.get(edge.target);
-    const line = edgeEls.get(edgeId);
-    if (line && u && v) {
-      line.setAttribute('x1', u.x);
-      line.setAttribute('y1', u.y);
-      line.setAttribute('x2', v.x);
-      line.setAttribute('y2', v.y);
-    }
-  }
-}
+if (typeof cytoscape === 'undefined') {
+  document.getElementById('debug').textContent = 'cytoscape failed to load';
+} else {
+const cy = cytoscape({
+  container: document.getElementById('graph'),
+  elements: data.nodes.map(n => ({ data: { id: n.id, label: n.label, kind: n.kind }, position: { x: n.x, y: n.y } }))
+    .concat(data.edges.map(e => ({ data: { id: e.id, source: e.source, target: e.target } }))),
+  layout: { name: 'preset' },
+  style: [
+    { selector: 'node', style: {
+        'label': 'data(label)',
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'width': 18,
+        'height': 18,
+        'font-size': 8,
+        'color': '#1b1b1b',
+        'background-color': '#c0c0c0',
+        'border-color': '#111',
+        'border-width': 1
+      }
+    },
+    { selector: 'edge', style: {
+        'curve-style': 'bezier',
+        'target-arrow-shape': 'triangle',
+        'line-color': '#4b4b4b',
+        'target-arrow-color': '#4b4b4b',
+        'width': 1.4,
+        'opacity': 0.7
+      }
+    },
+    { selector: '.hidden', style: { 'display': 'none' } },
+    { selector: 'node[kind = "var"]', style: { 'background-color': '#f7b32b' } },
+    { selector: 'node[kind = "var-tail"]', style: { 'background-color': '#f6ae2d' } },
+    { selector: 'node[kind = "clause"]', style: { 'background-color': '#f9564f' } },
+    { selector: 'node[kind = "terminal"]', style: { 'background-color': '#0d5c63', 'color': '#f6f3ea' } }
+  ]
+});
+cy.elements().addClass('hidden');
+cy.fit(cy.elements(), 40);
+const baseZoom = cy.zoom();
+const basePan = cy.pan();
 function setStep(next) {
   stepIndex = Math.max(0, Math.min(next, steps.length));
   activeNodes.clear();
@@ -161,34 +93,23 @@ function setStep(next) {
     for (const n of steps[i].addNodes) activeNodes.add(n);
     for (const e of steps[i].addEdges) activeEdges.add(e);
   }
+  cy.elements().addClass('hidden');
+  for (const n of activeNodes) cy.getElementById(n).removeClass('hidden');
+  for (const e of activeEdges) cy.getElementById(e).removeClass('hidden');
   slider.value = stepIndex;
-  render();
+  document.getElementById('stats').textContent = `Step ${stepIndex}/${steps.length} | Nodes ${activeNodes.size} | Edges ${activeEdges.size}`;
+  document.getElementById('debug').textContent = `cy: ${typeof cytoscape} | el: ${cy.elements().length}`;
+  cy.zoom(baseZoom);
+  cy.pan(basePan);
 }
 document.getElementById('back').addEventListener('click', () => setStep(stepIndex - 1));
 document.getElementById('forward').addEventListener('click', () => setStep(stepIndex + 1));
+document.getElementById('layout').addEventListener('click', () => {
+  cy.layout({ name: 'cose', animate: true, fit: true }).run();
+});
 slider.addEventListener('input', (evt) => setStep(parseInt(evt.target.value, 10)));
-svg.addEventListener('pointerdown', (evt) => {
-  const target = evt.target;
-  if (!target || !target.dataset) return;
-  const nodeId = target.dataset.nodeId;
-  if (!nodeId || !activeNodes.has(nodeId)) return;
-  dragging = nodeId;
-  target.classList.add('dragging');
-  svg.setPointerCapture(evt.pointerId);
-});
-svg.addEventListener('pointermove', (evt) => {
-  if (!dragging) return;
-  const pos = svgPoint(evt);
-  updateNodePosition(dragging, pos.x, pos.y);
-});
-svg.addEventListener('pointerup', (evt) => {
-  if (!dragging) return;
-  const el = nodeEls.get(dragging);
-  if (el) el.circle.classList.remove('dragging');
-  dragging = null;
-  svg.releasePointerCapture(evt.pointerId);
-});
-setStep(0);
+setStep(stepIndex);
+}
 </script>
 </body>
 </html>
