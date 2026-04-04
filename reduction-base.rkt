@@ -1,8 +1,7 @@
 #lang racket
 
 (require
-  "private/core-structures/set.rkt"
-  "private/core-structures/tuple.rkt"
+  "private/core-structures.rkt"
   "private/primitive-data-type.rkt"
   "el.rkt"
   [rename-in "private/decision-problem.rkt"
@@ -45,8 +44,7 @@
 
 
 (provide
- [except-out (all-from-out "private/core-structures/set.rkt"
-                           "private/core-structures/tuple.rkt"
+ [except-out (all-from-out "private/core-structures.rkt"
                            "private/primitive-data-type.rkt")
               natural
               set-∈-safe

@@ -2,13 +2,12 @@
 
 (require (except-in racket/gui set-equal?)
          (except-in mrlib/graph dot-positioning)
-         (only-in "../private/core-structures/set.rkt"
+         (only-in "../private/core-structures.rkt"
                   set-equal?
                   set-∪
                   dp-list->set
                   dp-set-members->list
-                  [set dp-set])
-         (only-in "../private/core-structures/tuple.rkt"
+                  [set dp-set]
                   dp-tuple?)
          (only-in "modified/dot.rkt" dot-positioning)
          (prefix-in gviz-wrap: "../gviz-wrapper/interface.rkt") 
