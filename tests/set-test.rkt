@@ -2,18 +2,15 @@
 
 (require "../private/core-structures/set.rkt"
          "../private/karp-contract.rkt"
-         "../private/problem-definition-utility.rkt"
          "../private/primitive-data-type.rkt"
          (prefix-in r: rosette/safe)
-         rackunit
-         rackunit/text-ui
-         (only-in racket/set list->set)
-         racket/stxparam)
+         rackunit rackunit/text-ui
+         (only-in racket/set list->set))
 
 (define (normalize-member v)
-  (cond [(dp-integer? v) (dp-integer-val v)]
-    [(r:integer? v) v]
-    [else v]))
+  (if (dp-integer? v)
+      (dp-integer-val v)
+      v))
 
 (define (members->set a-set)
   (list->set (map normalize-member (dp-set-members->list a-set))))
@@ -135,3 +132,6 @@
     (check-exn exn:fail:syntax? (λ () (expand #'(the-product-of any))))
     (check-exn exn:fail:syntax? (λ () (expand #'(subset-of s1))))
     (check-exn exn:fail:syntax? (λ () (expand #'(element-of s1))))))
+
+;; (require rackunit/text-ui)
+;; (run-tests SET)
