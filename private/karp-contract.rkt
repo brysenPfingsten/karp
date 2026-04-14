@@ -213,11 +213,7 @@
   (syntax-parse stx
     [(_ name/kc (v-id:id) condition msg-fail)
      #'(define name/kc (make-simple-contract/kc (v-id) condition msg-fail))
-     #;#'(define (name/kc v the-srcloc name context [predicate? #f])
-         (if ((λ (v-id)
-                condition) v)
-             v
-             (contract-fail/kc the-srcloc name msg-fail context v predicate?)))]))
+]))
 
 ; pass the value through contract, check turned off in solver/unprotected environment
 ; as ```contract''' of Racket
@@ -249,27 +245,21 @@
 (define v-dep-any/kc
   (const any/kc))
 
-; XXX(?): might not not handle the case when v itself is #f
 ; Note: guaranteed to shortcut
 (define (and/kc . kcs)
   (λ (v the-srcloc name context [predicate? #f])
-    (call/cc
-     (λ (return)
-       (let rec ([acc v]
-                 [rest kcs])
-         (if (null? rest)
-             ; return to #t when predicate? is #t (for the case when v itself is #f)
-             (if predicate? #t acc)
-             ; when predicate? is #f, the error is triggered here 
-             ; causing automatic shortcut
-             (let ([result ((car rest) v the-srcloc name context predicate?)])
-               (rec (if predicate?
-                        ; when predicate? is #t, enforce shortcut
-                        (if (not result)
-                            (return result)
-                            acc) ; equivalent to ``(and acc result)''
-                        result)
-                 (cdr rest)))))))))
+    (if predicate?
+        ; Predicate mode: short-circuit on first failure, return #t if all pass
+        (call/cc
+         (λ (return)
+           (for ([kc (in-list kcs)])
+             (unless (kc v the-srcloc name context #t)
+               (return #f)))
+           #t))
+        ; Contract mode: apply all contracts, return last result (or v if no contracts)
+        (for/fold ([result v])
+                  ([kc (in-list kcs)])
+          (kc v the-srcloc name context #f)))))
 
 (define (or/kc msg . kcs)
   (λ (v the-srcloc name context [predicate? #f])

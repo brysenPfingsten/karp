@@ -1,11 +1,13 @@
 #lang racket
 (require
   "private/primitive-data-type.rkt"
+  "private/karp-contract.rkt"
   [for-syntax syntax/parse])
 
 ; abstract elements with subscripts
 (provide el
          el?
+         el/kc
          _1s
          _2s
          _3s
@@ -30,24 +32,35 @@
 (define (el? a-sth)
   (el-struct? a-sth))
 
-; TODO: Add contracts to subscript accessors
+(define-simple-contract/kc el/kc (v)
+  (el? v)
+  "expects an element")
+
 ; first subscript
-(define (_1s a-el)
+(define/contract/kc (_1s a-el)
+  (->k ([a-el el/kc]) any/kc)
   (list-ref (el-struct-subscripts a-el) 0))
 
 ; second subscript
-(define (_2s a-el)
+(define/contract/kc (_2s a-el)
+  (->k ([a-el el/kc]) any/kc)
   (list-ref (el-struct-subscripts a-el) 1))
 
 ; third subscript
-(define (_3s a-el)
+(define/contract/kc (_3s a-el)
+  (->k ([a-el el/kc]) any/kc)
   (list-ref (el-struct-subscripts a-el) 2))
 
 ; k-th subscript
-(define (_ks a-el k)
-  ; TODO: require k to be a constant
-  (list-ref (el-struct-subscripts a-el) (- k 1)))
+(define/contract/kc (_ks a-el k)
+  (->k ([a-el el/kc] [k (and/kc
+                          (dp-natural-w/kc 'const)
+                          (make-simple-contract/kc (v)
+                            (dp-int-ge v 1)
+                            "subscript index needs to be at least 1"))]) any/kc)
+  (list-ref (el-struct-subscripts a-el) (- (dp-int-unwrap k) 1)))
 
 ; length of subscript
-(define (n_s a-el)
-  (length (el-struct-subscripts a-el)))
+(define/contract/kc (n_s a-el)
+  (->k ([a-el el/kc]) (dp-natural-w/kc 'const))
+  (dp-int-wrap (length (el-struct-subscripts a-el)) 'const))
