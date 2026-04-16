@@ -14,6 +14,9 @@
   [only-in racket/list
            (argmax lst-argmax)
            (argmin lst-argmin)]
+  racket/file
+  racket/path
+  racket/system
   racket/require
   racket/require-syntax
   [prefix-in r: rosette]
@@ -58,10 +61,87 @@
 (provide check-reduction)
 ;
 
-(define (visualize/step* steps)
+(define (normalize-int v)
+  (cond
+    [(dp-integer? v) (dp-integer-val v)]
+    [else v]))
+
+(define (maybe-set->list s)
+  (cond
+    [(dp-set? s) (dp-set-members->list s)]
+    [(list? s) s]
+    [else '()]))
+
+(define (hc-webviz-vertex? v)
+  (and (el? v)
+       (let ([arity (normalize-int (n_s v))])
+         (and (integer? arity)
+              (cond
+                [(= arity 3)
+                 (and (integer? (normalize-int (_1s v)))
+                      (integer? (normalize-int (_2s v))))]
+                [(= arity 2)
+                 (integer? (normalize-int (_1s v)))]
+                [(= arity 1)
+                 (let ([a (_1s v)])
+                   (or (symbol? a) (integer? (normalize-int a))))]
+                [else #f])))))
+
+(define (hc-webviz-steps? steps)
+  (and (list? steps)
+       (for/and ([step (in-list steps)])
+         (match step
+           [(list vs _es)
+            (for/and ([v (in-list (maybe-set->list vs))])
+              (hc-webviz-vertex? v))]
+           [(list vs _es _label)
+            (for/and ([v (in-list (maybe-set->list vs))])
+              (hc-webviz-vertex? v))]
+           [_ #f]))))
+
+(define (safe-temp-dir)
+  (with-handlers ([exn:fail? (lambda (_) (current-directory))])
+    (define d (find-system-path 'temp-dir))
+    (cond
+      [(and d (directory-exists? d)) d]
+      [(directory-exists? "/tmp") "/tmp"]
+      [else (current-directory)])))
+
+(define (open-path-in-default-browser p)
+  (define os (system-type 'os))
+  (define full-path (path->complete-path p))
+  (define as-string (path->string full-path))
+  (define ok?
+    (case os
+      [(windows)
+       (define cmd (find-executable-path "cmd.exe"))
+       (and cmd (system* cmd "/c" "start" "" as-string))]
+      [(macosx)
+       (define open (find-executable-path "open"))
+       (and open (system* open as-string))]
+      [else
+       (define xdg (find-executable-path "xdg-open"))
+       (and xdg (system* xdg as-string))]))
+  (unless ok?
+    (displayln (format "Visualization written to: ~a" as-string)))
+  (void))
+
+(define (visualize/step*/graphviz steps)
   (define visualize/step
     (dynamic-require "lib/graph-inspector.rkt" 'visualize/step))
   (visualize/step steps))
+
+(define (visualize/step* steps)
+  (cond
+    [(hc-webviz-steps? steps)
+     (define write-hc-steps-html
+       (dynamic-require "lib/graph-webviz.rkt" 'write-hc-steps-html (lambda () #f)))
+     (if write-hc-steps-html
+         (let ([output-path (make-temporary-file "karp-hc-visualization-~a.html" #:base-dir (safe-temp-dir))])
+           (write-hc-steps-html steps output-path #:title "3SAT -> Hamiltonian Cycle")
+           (open-path-in-default-browser output-path))
+         (visualize/step*/graphviz steps))]
+    [else (visualize/step*/graphviz steps)]))
 
 
 
@@ -570,7 +650,9 @@
                  #'(step-id-internal arg0 (... ...))]
                 [_:id #'step-id-internal])))
 
-           (define-forward-instance-construction #:from s #:to t (proc-id inst-id) body* ... final)))]
+           (define-forward-instance-construction #:from s #:to t (proc-id inst-id) body* ... final)
+
+           (provide proc-id step-id step-id-steps)))]
     [(_ (~seq #:from s)
         (~seq #:to t)
         (proc-id:id inst-id:id)

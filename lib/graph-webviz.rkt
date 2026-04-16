@@ -3,7 +3,9 @@
 (require racket/file
          racket/list
          racket/match
+         racket/runtime-path
          racket/string
+         net/url
          (only-in "../private/core-structures.rkt"
                   dp-set?
                   dp-set-members->list)
@@ -19,6 +21,8 @@
          (only-in "graph.rkt" e-u e-v))
 
 (provide write-hc-steps-html)
+
+(define-runtime-path cytoscape-runtime-path (build-path 'up "vendor" "cytoscape.min.js"))
 
 (define (normalize-int v)
   (cond
@@ -40,16 +44,16 @@
 (define (vertex-indices v)
   (define max-i #f)
   (define max-j #f)
-  (when (and (el? v) (>= (n_s v) 2))
+  (define arity (and (el? v) (normalize-int (n_s v))))
+  (when (and (integer? arity) (>= arity 2))
     (define i (normalize-int (_1s v)))
-    (when (integer? i)
-      (set! max-i i)))
+    (when (integer? i) (set! max-i i)))
   (cond
-    [(and (el? v) (= (n_s v) 3))
+    [(and (integer? arity) (= arity 3))
      (define j (normalize-int (_2s v)))
      (when (integer? j)
        (set! max-j j))]
-    [(and (el? v) (= (n_s v) 1))
+    [(and (integer? arity) (= arity 1))
      (define a (_1s v))
      (when (integer? a)
        (set! max-j a))])
@@ -66,6 +70,7 @@
 
 (define (node->json v max-i max-j x-step y-step)
   (define label (vertex-id v))
+  (define arity (and (el? v) (normalize-int (n_s v))))
   (define (pos x y kind i j tag)
     (hash "id" label
           "label" label
@@ -76,7 +81,7 @@
           "j" j
           "tag" tag))
   (cond
-    [(and (el? v) (= (n_s v) 3))
+    [(and (integer? arity) (= arity 3))
      (define i (normalize-int (_1s v)))
      (define j (normalize-int (_2s v)))
      (define tag (_3s v))
@@ -87,15 +92,15 @@
          [(eq? tag '*) 36]
          [else 18]))
      (pos (* x-step j) (+ (* y-step i) offset) "var" i j (format "~a" tag))]
-    [(and (el? v) (= (n_s v) 2))
+    [(and (integer? arity) (= arity 2))
      (define i (normalize-int (_1s v)))
      (define tag (_2s v))
      (pos (* x-step (+ max-j 1)) (+ (* y-step i) 18) "var-tail" i (add1 max-j) (format "~a" tag))]
-    [(and (el? v) (= (n_s v) 1))
+    [(and (integer? arity) (= arity 1))
      (define a (_1s v))
      (cond
        [(symbol? a)
-        (define is-s (eq? a 's))
+         (define is-s (eq? a 's))
         (define x (if is-s (- x-step) (* x-step (+ max-j 2))))
         (define y (+ (* y-step (+ max-i 1)) 18))
         (pos x y "terminal" #f #f (format "~a" a))]
@@ -174,9 +179,11 @@
     [else (json->string (format "~a" v))]))
 
 (define (cytoscape-js-path)
-  (define base-dir (or (current-load-relative-directory) (current-directory)))
-  (define js-path (build-path base-dir "vendor" "cytoscape.min.js"))
-  (and (file-exists? js-path) js-path))
+  (and (file-exists? cytoscape-runtime-path) cytoscape-runtime-path))
+
+(define (cytoscape-js-src)
+  (define p (cytoscape-js-path))
+  (and p (url->string (path->url p))))
 
 (define (write-hc-steps-html steps output-path #:title [title "3SAT -> Hamiltonian Cycle"] #:labels [labels #f])
   (define nodes (make-hash))
@@ -276,8 +283,8 @@
      "  </div>\n"
      "  <div id=\"graph\" aria-label=\"graph visualization\"></div>\n"
      "</div>\n"
-     "<script src=\"" (if (cytoscape-js-path)
-                           (path->string (cytoscape-js-path))
+     "<script src=\"" (if (cytoscape-js-src)
+                           (cytoscape-js-src)
                            "vendor/cytoscape.min.js") "\"></script>\n"
      "<script>\n"
      "const data = " json-data ";\n"
@@ -383,5 +390,5 @@
   (call-with-output-file output-path
     (lambda (out)
       (display html out))
-    #:exists 'replace)
+    #:exists 'truncate)
   output-path)
