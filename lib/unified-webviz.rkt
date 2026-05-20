@@ -449,16 +449,161 @@
       ""))
 
 ;; ============================================================================
+;; Layout DSL Processing
+;; ============================================================================
+
+;; Convert layout DSL S-expression to JSON-compatible hash
+(define (layout->json layout-sexp)
+  (if (not layout-sexp)
+      #f
+      (parse-layout-node layout-sexp)))
+
+;; Parse a node in the layout tree
+(define (parse-layout-node node)
+  (match node
+    ;; Top-level layout container
+    [`(layout ,children ...)
+     (hash "type" "layout"
+           "children" (map parse-layout-node children))]
+
+    ;; Variables iterator
+    [`(variables ,opts ...)
+     (parse-iterator "variables" opts)]
+
+    ;; Clauses iterator
+    [`(clauses ,opts ...)
+     (parse-iterator "clauses" opts)]
+
+    ;; Boundary section
+    [`(boundary ,opts ...)
+     (parse-iterator "boundary" opts)]
+
+    ;; Row container
+    [`(row ,opts ...)
+     (parse-container "row" opts)]
+
+    ;; Place node (vertex placement)
+    [`(place ,name ,opts ...)
+     (parse-place name opts)]
+
+    ;; Fallback
+    [else (hash "type" "unknown" "raw" (format "~a" node))]))
+
+;; Parse iterator (variables, clauses, boundary)
+(define (parse-iterator type opts)
+  (define index-var #f)
+  (define direction #f)
+  (define position #f)
+  (define children '())
+
+  (let loop ([remaining opts])
+    (match remaining
+      ['() (void)]
+      [`(#:index ,v . ,rest)
+       (set! index-var (format "~a" v))
+       (loop rest)]
+      [`(#:direction ,d . ,rest)
+       (set! direction (normalize-quoted-symbol d))
+       (loop rest)]
+      [`(#:position ,p . ,rest)
+       (set! position (normalize-quoted-symbol p))
+       (loop rest)]
+      [`(,child . ,rest)
+       (set! children (append children (list (parse-layout-node child))))
+       (loop rest)]))
+
+  (hash "type" type
+        "index" index-var
+        "direction" direction
+        "position" position
+        "children" children))
+
+;; Handle quoted symbols like 'down -> "down"
+(define (normalize-quoted-symbol v)
+  (match v
+    [`(quote ,sym) (format "~a" sym)]
+    [else (format "~a" v)]))
+
+;; Parse container (row)
+(define (parse-container type opts)
+  (define direction #f)
+  (define children '())
+
+  (let loop ([remaining opts])
+    (match remaining
+      ['() (void)]
+      [`(#:direction ,d . ,rest)
+       (set! direction (normalize-quoted-symbol d))
+       (loop rest)]
+      [`(,child . ,rest)
+       (set! children (append children (list (parse-layout-node child))))
+       (loop rest)]))
+
+  (hash "type" type
+        "direction" direction
+        "children" children))
+
+;; Parse place node
+(define (parse-place name opts)
+  (define match-pattern #f)
+  (define role #f)
+  (define shape #f)
+  (define color #f)
+
+  (let loop ([remaining opts])
+    (match remaining
+      ['() (void)]
+      [`(#:match ,pat . ,rest)
+       (set! match-pattern (parse-match-pattern pat))
+       (loop rest)]
+      [`(#:role ,r . ,rest)
+       (set! role (normalize-quoted-symbol r))
+       (loop rest)]
+      [`(#:shape ,s . ,rest)
+       (set! shape (normalize-quoted-symbol s))
+       (loop rest)]
+      [`(#:color ,c . ,rest)
+       (set! color (normalize-quoted-symbol c))
+       (loop rest)]
+      [`(,_ . ,rest)
+       (loop rest)]))
+
+  (hash "type" "place"
+        "name" (format "~a" name)
+        "match" match-pattern
+        "role" role
+        "shape" shape
+        "color" color))
+
+;; Parse match pattern like (el i j '+)
+(define (parse-match-pattern pat)
+  (match pat
+    [`(el ,args ...)
+     (hash "type" "el"
+           "args" (map normalize-pattern-arg args))]
+    [else (hash "type" "literal" "value" (format "~a" pat))]))
+
+;; Normalize a pattern argument (handle quoted symbols, etc.)
+(define (normalize-pattern-arg arg)
+  (match arg
+    [`(quote ,sym) (format "~a" sym)]  ; 'sym becomes sym
+    [(? symbol? s) (format "~a" s)]
+    [(? number? n) (format "~a" n)]
+    [else (format "~a" arg)]))
+
+;; ============================================================================
 ;; HTML Generation
 ;; ============================================================================
 
 (define (write-unified-viz-html steps output-path
                                  #:title [title "Karp Reduction Visualization"]
                                  #:source-instance [source-inst #f]
-                                 #:viz-type [explicit-viz-type #f])
+                                 #:viz-type [explicit-viz-type #f]
+                                 #:layout [layout #f])
 
   (define viz-type (or explicit-viz-type (detect-viz-type steps)))
   (define step-labels (extract-step-labels steps))
+  (define layout-json (layout->json layout))
 
   ;; Build unified data structure
   (define data
@@ -466,6 +611,7 @@
           "title" title
           "stepLabels" step-labels
           "stepCount" (length steps)
+          "layout" layout-json
           ;; Type-specific data
           "graph" (if (eq? viz-type 'graph) (extract-graph-data steps source-inst) #f)
           "mapping" (if (eq? viz-type 'mapping) (extract-mapping-data steps source-inst) #f)
@@ -548,16 +694,33 @@ header h1 { margin: 0; font-size: 18px; font-weight: 600; }
   flex: 1;
   display: flex;
   overflow: hidden;
+  min-height: 0;  /* Required for flex children to shrink properly */
 }
 
 /* Graph-specific styles */
 #graph-container {
   flex: 1;
   display: none;
+  flex-direction: row;
+  min-height: 0;
+}
+#graphSourcePanel {
+  width: 280px;
+  margin: 10px;
+  overflow: auto;
+  flex-shrink: 0;
+}
+#cy-wrapper {
+  flex: 1;
+  position: relative;
+  min-height: 0;
 }
 #cy {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   background: var(--panel-bg);
 }
 
@@ -708,12 +871,12 @@ cytoscape-src
 </div>
 <div class="content">
   <div id="graph-container">
-    <div style="display: flex; height: 100%;">
-      <div class="panel" id="graphSourcePanel" style="width: 250px; margin: 10px; overflow: auto; display: none;">
-        <h2>Source Instance</h2>
-        <div id="graphSourceContent"></div>
-      </div>
-      <div id="cy" style="flex: 1;"></div>
+    <div class="panel" id="graphSourcePanel" style="display: none;">
+      <h2>Source Instance</h2>
+      <div id="graphSourceContent"></div>
+    </div>
+    <div id="cy-wrapper">
+      <div id="cy"></div>
     </div>
   </div>
   <div id="mapping-container">
@@ -755,6 +918,119 @@ document.getElementById('title').textContent = data.title;
 const slider = document.getElementById('slider');
 slider.max = data.stepCount;
 let stepIndex = 0;
+
+// ============================================================================
+// Layout-aware Label Generation
+// ============================================================================
+
+// Parse an el-style label like "(el 1ₚ 2ₚ '+)" into components
+function parseElLabel(label) {
+  // Match patterns like (el X) or (el X Y) or (el X Y Z)
+  // Handle subscript numbers like 1ₚ, 2ₚ
+  const cleaned = label.replace(/[()]/g, '').trim();
+  const parts = cleaned.split(/\s+/);
+
+  if (parts[0] !== 'el') return null;
+
+  const args = parts.slice(1).map(p => {
+    // Remove subscript markers and quotes
+    return p.replace(/ₚ/g, '').replace(/'/g, '');
+  });
+
+  return { type: 'el', args };
+}
+
+// Generate a compact label from parsed el components
+function formatCompactLabel(parsed) {
+  if (!parsed || parsed.type !== 'el') return null;
+
+  const args = parsed.args;
+  if (args.length === 1) {
+    // Single arg: terminal (s, t) or clause index
+    const val = args[0];
+    if (val === 's' || val === 't') return val;
+    return `C${val}`;
+  } else if (args.length === 2) {
+    // Two args: (i, tag) like (1, ^)
+    const [i, tag] = args;
+    if (tag === '^') return `${i}^`;
+    return `${i},${tag}`;
+  } else if (args.length === 3) {
+    // Three args: (i, j, tag) like (1, 2, +)
+    const [i, j, tag] = args;
+    return `${i},${j}${tag}`;
+  }
+  return null;
+}
+
+// Get a layout-aware label for a node
+function getLayoutLabel(originalLabel, layout) {
+  // Try to parse as el expression
+  const parsed = parseElLabel(originalLabel);
+  if (parsed) {
+    const compact = formatCompactLabel(parsed);
+    if (compact) return compact;
+  }
+
+  // Fallback: return original but cleaned up
+  return originalLabel
+    .replace(/^\(el\s+/, '')
+    .replace(/\)$/, '')
+    .replace(/ₚ/g, '')
+    .replace(/'/g, '');
+}
+
+// Find layout config for a node (shape, color, role)
+function getNodeLayoutConfig(originalLabel, layout) {
+  if (!layout) return null;
+
+  const parsed = parseElLabel(originalLabel);
+  if (!parsed) return null;
+
+  // Search layout tree for matching place
+  function findPlace(node) {
+    if (!node) return null;
+    if (node.type === 'place' && node.match) {
+      // Check if this place matches our node
+      if (matchesPattern(parsed, node.match)) {
+        return {
+          role: node.role,
+          shape: node.shape,
+          color: node.color
+        };
+      }
+    }
+    if (node.children) {
+      for (const child of node.children) {
+        const found = findPlace(child);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  return findPlace(layout);
+}
+
+// Check if a parsed el matches a layout pattern
+function matchesPattern(parsed, pattern) {
+  if (pattern.type !== 'el') return false;
+  if (parsed.args.length !== pattern.args.length) return false;
+
+  // Check each argument - variables (i, j) match any number, literals must match exactly
+  for (let k = 0; k < parsed.args.length; k++) {
+    const pArg = pattern.args[k];
+    const nArg = parsed.args[k];
+
+    // Variable names like 'i', 'j' match any numeric value
+    if (pArg === 'i' || pArg === 'j') continue;
+
+    // Otherwise must match exactly
+    if (pArg !== nArg) return false;
+  }
+
+  return true;
+}
 
 // ============================================================================
 // Graph Renderer
@@ -802,8 +1078,21 @@ function initGraphRenderer() {
 
   const elements = [];
   data.graph.nodes.forEach(n => {
+    // Use layout-aware labeling
+    const displayLabel = data.layout ? getLayoutLabel(n.label, data.layout) : n.label;
+    const layoutConfig = data.layout ? getNodeLayoutConfig(n.label, data.layout) : null;
+
     elements.push({
-      data: { id: n.id, label: n.label, kind: n.kind, tag: n.tag },
+      data: {
+        id: n.id,
+        label: displayLabel,
+        originalLabel: n.label,
+        kind: n.kind,
+        tag: n.tag,
+        // Layout-specified styling
+        nodeShape: layoutConfig?.shape || null,
+        nodeColor: layoutConfig?.color || null
+      },
       position: { x: n.x, y: n.y }
     });
     nodeVisibility[n.id] = false;
@@ -815,46 +1104,141 @@ function initGraphRenderer() {
     edgeVisibility[e.id] = false;
   });
 
+  // Build styles - shape and color come from layout config
+  const styles = [
+    {
+      selector: 'node',
+      style: {
+        'label': 'data(label)',
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'background-color': '#4a90d9',
+        'color': '#fff',
+        'font-size': '10px',
+        'width': 28,
+        'height': 28
+      }
+    },
+    // Fallback styles for nodes without layout config
+    {
+      selector: 'node[kind="clause"]',
+      style: { 'background-color': '#666', 'shape': 'rectangle', 'width': 36, 'height': 24 }
+    },
+    {
+      selector: 'node[kind="terminal"]',
+      style: { 'background-color': '#e74c3c', 'shape': 'diamond', 'width': 32, 'height': 32 }
+    },
+    {
+      selector: 'edge',
+      style: {
+        'width': 2,
+        'line-color': '#999',
+        'target-arrow-color': '#999',
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier'
+      }
+    },
+    {
+      selector: '.hidden',
+      style: { 'opacity': 0 }
+    }
+  ];
+
+  // Add layout-specified styles dynamically
+  // Cytoscape supports: ellipse, triangle, rectangle, diamond, pentagon, hexagon, etc.
+  const shapeMap = {
+    'ellipse': 'ellipse',
+    'circle': 'ellipse',
+    'triangle': 'triangle',
+    'rectangle': 'rectangle',
+    'rect': 'rectangle',
+    'diamond': 'diamond',
+    'pentagon': 'pentagon',
+    'hexagon': 'hexagon',
+    'star': 'star',
+    'vee': 'vee'
+  };
+
+  // Named color palette
+  const colorPalette = {
+    // Primary colors
+    'red': '#e74c3c',
+    'blue': '#3498db',
+    'green': '#2ecc71',
+    'yellow': '#f1c40f',
+    'orange': '#e67e22',
+    'purple': '#9b59b6',
+    'pink': '#e91e63',
+    'cyan': '#00bcd4',
+    'teal': '#1abc9c',
+
+    // Darker variants
+    'dark-red': '#c0392b',
+    'dark-blue': '#2980b9',
+    'dark-green': '#27ae60',
+    'dark-orange': '#d35400',
+    'dark-purple': '#8e44ad',
+    'dark-teal': '#16a085',
+
+    // Lighter variants
+    'light-red': '#ff6b6b',
+    'light-blue': '#74b9ff',
+    'light-green': '#55efc4',
+    'light-orange': '#ffeaa7',
+    'light-purple': '#a29bfe',
+    'light-pink': '#fd79a8',
+
+    // Neutrals
+    'gray': '#95a5a6',
+    'dark-gray': '#7f8c8d',
+    'light-gray': '#bdc3c7',
+    'black': '#2c3e50',
+    'white': '#ecf0f1',
+
+    // Semantic colors
+    'positive': '#3498db',
+    'negative': '#e67e22',
+    'entry': '#2ecc71',
+    'exit': '#9b59b6',
+    'terminal': '#e74c3c',
+    'clause': '#f39c12'
+  };
+
+  // Resolve color - check palette first, otherwise use as-is (hex, rgb, etc.)
+  function resolveColor(color) {
+    if (!color) return null;
+    return colorPalette[color] || color;
+  }
+
+  // Collect unique shape/color combinations and create selectors
+  const seenConfigs = new Set();
+  data.graph.nodes.forEach(n => {
+    const shape = n.nodeShape;
+    const color = n.nodeColor;
+    if (shape || color) {
+      const key = `${shape || 'default'}:${color || 'default'}`;
+      if (!seenConfigs.has(key)) {
+        seenConfigs.add(key);
+        const selector = [];
+        if (shape) selector.push(`nodeShape="${shape}"`);
+        if (color) selector.push(`nodeColor="${color}"`);
+        const style = {};
+        if (shape && shapeMap[shape]) style['shape'] = shapeMap[shape];
+        if (color) style['background-color'] = resolveColor(color);
+        if (Object.keys(style).length > 0) {
+          styles.push({
+            selector: `node[${selector.join('][')}]`,
+            style: style
+          });
+        }
+      }
+    }
+  });
+
   cy = cytoscape({
     container: document.getElementById('cy'),
     elements: elements,
-    style: [
-      {
-        selector: 'node',
-        style: {
-          'label': 'data(label)',
-          'text-valign': 'center',
-          'text-halign': 'center',
-          'background-color': '#4a90d9',
-          'color': '#fff',
-          'font-size': '10px',
-          'width': 28,
-          'height': 28
-        }
-      },
-      {
-        selector: 'node[kind="clause"]',
-        style: { 'background-color': '#666', 'shape': 'rectangle', 'width': 36, 'height': 24 }
-      },
-      {
-        selector: 'node[kind="terminal"]',
-        style: { 'background-color': '#e74c3c', 'shape': 'diamond', 'width': 32, 'height': 32 }
-      },
-      {
-        selector: 'edge',
-        style: {
-          'width': 2,
-          'line-color': '#999',
-          'target-arrow-color': '#999',
-          'target-arrow-shape': 'triangle',
-          'curve-style': 'bezier'
-        }
-      },
-      {
-        selector: '.hidden',
-        style: { 'opacity': 0 }
-      }
-    ],
+    style: styles,
     layout: { name: 'preset' },
     userZoomingEnabled: true,
     userPanningEnabled: true,
