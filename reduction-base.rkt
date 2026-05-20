@@ -135,14 +135,15 @@
 
 ;; Unified visualization dispatch
 ;; Uses the unified-webviz module which auto-detects visualization type
-(define (visualize/step* steps #:title [title #f] #:source-instance [source-inst #f])
+(define (visualize/step* steps #:title [title #f] #:source-instance [source-inst #f] #:layout [layout #f])
   (define write-unified-viz-html
     (dynamic-require "lib/unified-webviz.rkt" 'write-unified-viz-html (lambda () #f)))
   (if write-unified-viz-html
       (let ([output-path (make-temporary-file "karp-visualization-~a.html" #:base-dir (safe-temp-dir))])
         (write-unified-viz-html steps output-path
                                  #:title (or title "Karp Reduction")
-                                 #:source-instance source-inst)
+                                 #:source-instance source-inst
+                                 #:layout layout)
         (open-path-in-default-browser output-path))
       (visualize/step*/graphviz steps)))
 
@@ -620,9 +621,10 @@
 
 (define-syntax (define-forward-instance-construction stx)
   (syntax-parse stx
+    ;; Pattern with #:gui and optional #:layout
     [(_ (~seq #:from s)
         (~seq #:to t)
-        (proc-id:id inst-id:id #:gui step-id:id)
+        (proc-id:id inst-id:id #:gui step-id:id (~optional (~seq #:layout layout-spec)))
         (~and body* ((~datum define) v:id ((~datum for/set) . parts))) ... final)
      (with-syntax (;[s->t-construction (format-id #'s "~a->~a" #'s #'t)]
                    [a-s-instance (format-id #'s "a-~a-instance" #'s)]
@@ -633,7 +635,10 @@
                    [step-id-internal (generate-temporary #'step-id)]
                    [step-id-steps (format-id #'step-id "~a-steps" #'step-id)]
                    [step-log (generate-temporary #'gui-acc)]
-                   [reduction-title (datum->syntax #'s (format "~a → ~a" (syntax-e #'s) (syntax-e #'t)))])
+                   [reduction-title (datum->syntax #'s (format "~a → ~a" (syntax-e #'s) (syntax-e #'t)))]
+                   [layout-data (if (attribute layout-spec)
+                                    #`(quote #,(syntax->datum #'layout-spec))
+                                    #'#f)])
        #'(begin
 
            (define (step-id-steps a-s-instance)
@@ -649,7 +654,8 @@
            (define (step-id-internal a-s-instance)
              (visualize/step* (step-id-steps a-s-instance)
                               #:title reduction-title
-                              #:source-instance a-s-instance))
+                              #:source-instance a-s-instance
+                              #:layout layout-data))
 
            (define-syntax step-id
              (func-type-info
