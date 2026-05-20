@@ -10,6 +10,7 @@
   ;          so that everything comes from decision problem
   [only-in "private/dp-type-info.rkt" func-type-info]
   "private/karp-contract.rkt"
+  [only-in "lib/cnf.rkt" dp-cnf-clause?]
 
   [only-in racket/list
            (argmax lst-argmax)
@@ -607,6 +608,9 @@
       (cond
         [(el? new-elem)
          (values (set-∪ (set new-elem) verts) edges)]
+        ;; SAT clauses are treated as "vertices" (main elements)
+        [(dp-cnf-clause? new-elem)
+         (values (set-∪ (set new-elem) verts) edges)]
         ;; TODO: Proper vertex? predicate
         [(or (dp-tuple? new-elem) (dp-set? new-elem))
          (values verts (set-∪ (set new-elem) edges))]
@@ -628,7 +632,8 @@
                    [instance-type-annotate (format-id #'s "dp-annotate-instance-type-~a" #'s)]
                    [step-id-internal (generate-temporary #'step-id)]
                    [step-id-steps (format-id #'step-id "~a-steps" #'step-id)]
-                   [step-log (generate-temporary #'gui-acc)])
+                   [step-log (generate-temporary #'gui-acc)]
+                   [reduction-title (datum->syntax #'s (format "~a → ~a" (syntax-e #'s) (syntax-e #'t)))])
        #'(begin
 
            (define (step-id-steps a-s-instance)
@@ -643,6 +648,7 @@
 
            (define (step-id-internal a-s-instance)
              (visualize/step* (step-id-steps a-s-instance)
+                              #:title reduction-title
                               #:source-instance a-s-instance))
 
            (define-syntax step-id

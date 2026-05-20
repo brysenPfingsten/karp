@@ -25,7 +25,16 @@
          (only-in "../el.rkt"
                   el?
                   _1s _2s _3s n_s)
-         (only-in "graph.rkt" e-u e-v))
+         (only-in "graph.rkt" e-u e-v dp-graph? vertices-of edges-of)
+         (only-in "cnf.rkt"
+                  dp-cnf-clause?
+                  dp-cnf-clause-lst
+                  dp-cnf?
+                  dp-cnf-lst
+                  dp-literal?
+                  dp-literal-x
+                  dp-literal-neg?
+                  positive-literal?))
 
 (provide write-unified-viz-html
          detect-viz-type
@@ -79,7 +88,7 @@
 ;; ============================================================================
 
 (define (viz-type? v)
-  (member v '(graph mapping)))
+  (member v '(graph mapping sat)))
 
 ;; Check if vertex is a graph-style el (has layout hints)
 (define (graph-vertex? v)
@@ -101,6 +110,10 @@
               (symbol? (_1s v))
               (member (_1s v) '(obj gadget element))))))
 
+;; Check if item is a SAT clause
+(define (sat-clause? v)
+  (dp-cnf-clause? v))
+
 (define (detect-viz-type steps)
   (cond
     [(null? steps) 'graph]
@@ -112,6 +125,7 @@
      (define vertices (set->list vs))
      (cond
        [(null? vertices) 'graph]
+       [(sat-clause? (car vertices)) 'sat]
        [(mapping-vertex? (car vertices)) 'mapping]
        [else 'graph])]))
 
@@ -190,7 +204,7 @@
   (define max-y (if (null? ys) 100 (+ (apply max ys) padding)))
   (hash "minX" min-x "minY" min-y "width" (- max-x min-x) "height" (- max-y min-y)))
 
-(define (extract-graph-data steps)
+(define (extract-graph-data steps source-inst)
   (define nodes (make-hash))
   (define edges (make-hash))
 
@@ -243,10 +257,40 @@
             "addEdges" (for/list ([e (in-list (set->list es))])
                          (edge-id-of (edge-id (e-u e) (e-v e)))))))
 
+  ;; Extract source instance data (CNF for 3SAT)
+  (define source-data
+    (if (and source-inst (dp-instance? source-inst))
+        (let* ([fields (cdr (dp-instance-fields source-inst))]
+               [the-cnf #f]
+               [extras '()]
+               [scalar-count 0])
+          (for ([field fields] [i (in-naturals)])
+            (cond
+              [(and (dp-cnf? field) (not the-cnf))
+               (set! the-cnf field)]
+              [(dp-integer? field)
+               (set! scalar-count (add1 scalar-count))
+               (define name (if (= scalar-count 1) "K" (format "K~a" scalar-count)))
+               (set! extras (cons (hash "name" name "value" (normalize-int field)) extras))]
+              [(number? field)
+               (set! scalar-count (add1 scalar-count))
+               (define name (if (= scalar-count 1) "K" (format "K~a" scalar-count)))
+               (set! extras (cons (hash "name" name "value" field) extras))]))
+          (if the-cnf
+              (hash "type" "cnf"
+                    "clauses" (for/list ([clause (in-list (dp-cnf-lst the-cnf))])
+                                (for/list ([lit (in-list (dp-cnf-clause-lst clause))])
+                                  (hash "var" (format "~a" (dp-literal-x lit))
+                                        "positive" (positive-literal? lit))))
+                    "extras" (reverse extras))
+              #f))
+        #f))
+
   (hash "nodes" nodes-json
         "edges" edges-json
         "steps" steps-json
-        "viewBox" (bounds nodes-json)))
+        "viewBox" (bounds nodes-json)
+        "sourceInstance" source-data))
 
 ;; ============================================================================
 ;; Mapping Data Extraction
@@ -315,6 +359,76 @@
         "sourceInstance" source-data))
 
 ;; ============================================================================
+;; SAT Data Extraction
+;; ============================================================================
+
+(define (clause->json clause)
+  (define literals (dp-cnf-clause-lst clause))
+  (hash "literals"
+        (for/list ([lit (in-list literals)])
+          (hash "var" (format "~a" (dp-literal-x lit))
+                "positive" (positive-literal? lit)))))
+
+(define (extract-sat-data steps source-inst)
+  (define all-clauses '())
+  (define all-variables (mutable-set))
+  (define step-data '())
+
+  (for ([step (in-list steps)] [i (in-naturals)])
+    (define vs (if (and (list? step) (>= (length step) 1)) (first step) (set)))
+    (define label (and (list? step) (= (length step) 3) (third step)))
+    (define step-clauses '())
+
+    (for ([v (in-list (set->list vs))])
+      (when (dp-cnf-clause? v)
+        (define clause-json (clause->json v))
+        (set! all-clauses (cons clause-json all-clauses))
+        (set! step-clauses (cons (length all-clauses) step-clauses))
+        ;; Collect variables
+        (for ([lit (in-list (dp-cnf-clause-lst v))])
+          (set-add! all-variables (format "~a" (dp-literal-x lit))))))
+
+    (set! step-data
+          (append step-data
+                  (list (hash "clauseIndices" (reverse step-clauses)
+                              "label" (or label ""))))))
+
+  ;; Extract source instance data (graph for vertex cover)
+  (define source-data
+    (if (and source-inst (dp-instance? source-inst))
+        (let* ([fields (cdr (dp-instance-fields source-inst))]
+               [the-graph #f]
+               [extras '()]
+               [scalar-count 0])
+          (for ([field fields] [i (in-naturals)])
+            (cond
+              [(and (dp-graph? field) (not the-graph))
+               (set! the-graph field)]
+              [(dp-integer? field)
+               (set! scalar-count (add1 scalar-count))
+               (define name (if (= scalar-count 1) "K" (format "K~a" scalar-count)))
+               (set! extras (cons (hash "name" name "value" (normalize-int field)) extras))]
+              [(number? field)
+               (set! scalar-count (add1 scalar-count))
+               (define name (if (= scalar-count 1) "K" (format "K~a" scalar-count)))
+               (set! extras (cons (hash "name" name "value" field) extras))]))
+          (if the-graph
+              (hash "type" "graph"
+                    "vertices" (for/list ([v (in-list (set->list (vertices-of the-graph)))])
+                                 (format "~a" v))
+                    "edges" (for/list ([e (in-list (set->list (edges-of the-graph)))])
+                              (hash "u" (format "~a" (e-u e))
+                                    "v" (format "~a" (e-v e))))
+                    "extras" (reverse extras))
+              #f))
+        #f))
+
+  (hash "clauses" (reverse all-clauses)
+        "variables" (set->list all-variables)
+        "steps" step-data
+        "sourceInstance" source-data))
+
+;; ============================================================================
 ;; Step Labels Extraction
 ;; ============================================================================
 
@@ -353,8 +467,9 @@
           "stepLabels" step-labels
           "stepCount" (length steps)
           ;; Type-specific data
-          "graph" (if (eq? viz-type 'graph) (extract-graph-data steps) #f)
-          "mapping" (if (eq? viz-type 'mapping) (extract-mapping-data steps source-inst) #f)))
+          "graph" (if (eq? viz-type 'graph) (extract-graph-data steps source-inst) #f)
+          "mapping" (if (eq? viz-type 'mapping) (extract-mapping-data steps source-inst) #f)
+          "sat" (if (eq? viz-type 'sat) (extract-sat-data steps source-inst) #f)))
 
   (define json-data (json->string data))
   (define cytoscape-src (cytoscape-js-content))
@@ -523,6 +638,56 @@ tr.hidden { opacity: 0.25; }
 .legend-color { width: 14px; height: 14px; border-radius: 2px; }
 .legend-color.new { background: #e8f5e9; border: 1px solid #a5d6a7; }
 .legend-color.gadget { background: #ffebee; border: 1px solid #ef9a9a; }
+
+/* SAT-specific styles */
+#sat-container {
+  flex: 1;
+  display: none;
+  padding: 20px;
+  overflow: auto;
+}
+.sat-content {
+  display: grid;
+  grid-template-columns: 1fr 40px 1fr;
+  gap: 0;
+  align-items: start;
+}
+.clause {
+  background: #f8f8f8;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 4px 0;
+  font-family: monospace;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.clause.hidden { opacity: 0.25; }
+.literal { padding: 2px 6px; border-radius: 3px; }
+.literal.positive { background: #e8f5e9; color: #2e7d32; }
+.literal.negative { background: #ffebee; color: #c62828; }
+.or-symbol { color: #999; font-size: 12px; }
+.source-graph {
+  margin-bottom: 16px;
+}
+.source-graph .edge {
+  font-family: monospace;
+  padding: 2px 8px;
+  background: #f0f0f0;
+  border-radius: 3px;
+  margin: 2px;
+  display: inline-block;
+}
+.cnf-display .clause-row {
+  font-family: monospace;
+  padding: 4px 0;
+}
+.cnf-display .literal {
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin: 0 2px;
+}
 </style>
 <script>
 HTML
@@ -542,7 +707,15 @@ cytoscape-src
   <div class="stats" id="stats"></div>
 </div>
 <div class="content">
-  <div id="graph-container"><div id="cy"></div></div>
+  <div id="graph-container">
+    <div style="display: flex; height: 100%;">
+      <div class="panel" id="graphSourcePanel" style="width: 250px; margin: 10px; overflow: auto; display: none;">
+        <h2>Source Instance</h2>
+        <div id="graphSourceContent"></div>
+      </div>
+      <div id="cy" style="flex: 1;"></div>
+    </div>
+  </div>
   <div id="mapping-container">
     <div class="mapping-content">
       <div class="panel" id="sourcePanel">
@@ -553,6 +726,19 @@ cytoscape-src
       <div class="panel" id="targetPanel">
         <h2>Target Instance</h2>
         <div id="targetContent"></div>
+      </div>
+    </div>
+  </div>
+  <div id="sat-container">
+    <div class="sat-content">
+      <div class="panel" id="satSourcePanel">
+        <h2>Source Instance</h2>
+        <div id="satSourceContent"></div>
+      </div>
+      <div class="arrow-col">&rarr;</div>
+      <div class="panel" id="satTargetPanel">
+        <h2>Target Instance (CNF)</h2>
+        <div id="satTargetContent"></div>
       </div>
     </div>
   </div>
@@ -580,7 +766,39 @@ const edgeVisibility = {};
 function initGraphRenderer() {
   if (!data.graph || typeof cytoscape === 'undefined') return;
 
-  document.getElementById('graph-container').style.display = 'block';
+  document.getElementById('graph-container').style.display = 'flex';
+
+  // Render source instance (CNF) if available
+  if (data.graph.sourceInstance) {
+    const panel = document.getElementById('graphSourcePanel');
+    const container = document.getElementById('graphSourceContent');
+    panel.style.display = 'block';
+
+    let html = '';
+    if (data.graph.sourceInstance.type === 'cnf') {
+      html += '<div class="cnf-display">';
+      data.graph.sourceInstance.clauses.forEach((clause, i) => {
+        html += '<div class="clause-row">(';
+        html += clause.map(lit => {
+          const cls = lit.positive ? 'positive' : 'negative';
+          const prefix = lit.positive ? '' : '¬';
+          return `<span class="literal ${cls}">${prefix}${lit.var}</span>`;
+        }).join(' <span class="or-symbol">∨</span> ');
+        html += ')</div>';
+      });
+      html += '</div>';
+    }
+
+    if (data.graph.sourceInstance.extras && data.graph.sourceInstance.extras.length > 0) {
+      html += '<div class="extras">';
+      for (const extra of data.graph.sourceInstance.extras) {
+        html += `<div class="extra-row"><span class="extra-name">${extra.name}:</span><span class="extra-value">${extra.value}</span></div>`;
+      }
+      html += '</div>';
+    }
+
+    container.innerHTML = html;
+  }
 
   const elements = [];
   data.graph.nodes.forEach(n => {
@@ -770,6 +988,80 @@ function updateMappingStep() {
 }
 
 // ============================================================================
+// SAT Renderer
+// ============================================================================
+function initSatRenderer() {
+  if (!data.sat) return;
+
+  document.getElementById('sat-container').style.display = 'block';
+  renderSatSource();
+}
+
+function renderSatSource() {
+  const container = document.getElementById('satSourceContent');
+  if (!data.sat.sourceInstance) {
+    document.getElementById('satSourcePanel').style.display = 'none';
+    return;
+  }
+
+  let html = '';
+  if (data.sat.sourceInstance.type === 'graph') {
+    html += '<div class="source-graph">';
+    html += '<strong>Vertices:</strong> ' + data.sat.sourceInstance.vertices.join(', ');
+    html += '<br><br><strong>Edges:</strong><br>';
+    for (const edge of data.sat.sourceInstance.edges) {
+      html += `<span class="edge">{${edge.u}, ${edge.v}}</span> `;
+    }
+    html += '</div>';
+  }
+
+  if (data.sat.sourceInstance.extras && data.sat.sourceInstance.extras.length > 0) {
+    html += '<div class="extras">';
+    for (const extra of data.sat.sourceInstance.extras) {
+      html += `<div class="extra-row"><span class="extra-name">${extra.name}:</span><span class="extra-value">${extra.value}</span></div>`;
+    }
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function updateSatStep() {
+  if (!data.sat) return;
+
+  const container = document.getElementById('satTargetContent');
+
+  // Collect visible clause indices up to current step
+  const visibleIndices = new Set();
+  for (let i = 0; i < stepIndex; i++) {
+    data.sat.steps[i].clauseIndices.forEach(idx => visibleIndices.add(idx));
+  }
+
+  let html = '<div class="clauses-list">';
+  data.sat.clauses.forEach((clause, i) => {
+    const isVisible = visibleIndices.has(i + 1);
+    const cls = isVisible ? 'clause' : 'clause hidden';
+    html += `<div class="${cls}">`;
+    html += clause.literals.map(lit => {
+      const litCls = lit.positive ? 'literal positive' : 'literal negative';
+      const prefix = lit.positive ? '' : '¬';
+      return `<span class="${litCls}">${prefix}${lit.var}</span>`;
+    }).join(' <span class="or-symbol">∨</span> ');
+    html += '</div>';
+  });
+  html += '</div>';
+
+  html += `
+    <div class="legend">
+      <div class="legend-item"><span class="literal positive">x</span> Positive literal</div>
+      <div class="legend-item"><span class="literal negative">¬x</span> Negative literal</div>
+    </div>
+  `;
+
+  container.innerHTML = html;
+}
+
+// ============================================================================
 // Unified Step Controller
 // ============================================================================
 function setStep(n) {
@@ -787,6 +1079,8 @@ function setStep(n) {
     updateGraphStep();
   } else if (data.vizType === 'mapping') {
     updateMappingStep();
+  } else if (data.vizType === 'sat') {
+    updateSatStep();
   }
 }
 
@@ -802,6 +1096,8 @@ if (data.vizType === 'graph') {
   initGraphRenderer();
 } else if (data.vizType === 'mapping') {
   initMappingRenderer();
+} else if (data.vizType === 'sat') {
+  initSatRenderer();
 }
 
 setStep(0);
