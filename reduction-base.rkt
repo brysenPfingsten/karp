@@ -132,42 +132,18 @@
     (dynamic-require "lib/graph-inspector.rkt" 'visualize/step))
   (visualize/step steps))
 
-(define (mapping-webviz-steps? steps)
-  (define dp-mapping?
-    (dynamic-require "private/core-structures.rkt" 'dp-mapping? (lambda () (lambda (_) #f))))
-  (and (list? steps)
-       (not (null? steps))
-       (for/and ([step (in-list steps)])
-         (match step
-           [(list (? dp-set?) (? dp-mapping?) _ ...) #t]
-           [_ #f]))))
-
-(define (mapping-el-webviz-steps? steps)
-  (define pred
-    (dynamic-require "lib/mapping-webviz.rkt" 'mapping-el-webviz-steps? (lambda () (lambda (_) #f))))
-  (pred steps))
-
+;; Unified visualization dispatch
+;; Uses the unified-webviz module which auto-detects visualization type
 (define (visualize/step* steps #:title [title #f] #:source-instance [source-inst #f])
-  (cond
-    [(hc-webviz-steps? steps)
-     (define write-hc-steps-html
-       (dynamic-require "lib/graph-webviz.rkt" 'write-hc-steps-html (lambda () #f)))
-     (if write-hc-steps-html
-         (let ([output-path (make-temporary-file "karp-hc-visualization-~a.html" #:base-dir (safe-temp-dir))])
-           (write-hc-steps-html steps output-path #:title (or title "3SAT -> Hamiltonian Cycle"))
-           (open-path-in-default-browser output-path))
-         (visualize/step*/graphviz steps))]
-    [(mapping-el-webviz-steps? steps)
-     (define write-mapping-steps-html
-       (dynamic-require "lib/mapping-webviz.rkt" 'write-mapping-steps-html (lambda () #f)))
-     (if write-mapping-steps-html
-         (let ([output-path (make-temporary-file "karp-mapping-visualization-~a.html" #:base-dir (safe-temp-dir))])
-           (write-mapping-steps-html steps output-path
-                                      #:title (or title "Mapping Reduction")
-                                      #:source-instance source-inst)
-           (open-path-in-default-browser output-path))
-         (visualize/step*/graphviz steps))]
-    [else (visualize/step*/graphviz steps)]))
+  (define write-unified-viz-html
+    (dynamic-require "lib/unified-webviz.rkt" 'write-unified-viz-html (lambda () #f)))
+  (if write-unified-viz-html
+      (let ([output-path (make-temporary-file "karp-visualization-~a.html" #:base-dir (safe-temp-dir))])
+        (write-unified-viz-html steps output-path
+                                 #:title (or title "Karp Reduction")
+                                 #:source-instance source-inst)
+        (open-path-in-default-browser output-path))
+      (visualize/step*/graphviz steps)))
 
 
 
