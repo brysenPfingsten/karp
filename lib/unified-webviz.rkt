@@ -174,24 +174,26 @@
      (define i (normalize-int (_1s v)))
      (define j (normalize-int (_2s v)))
      (define tag (_3s v))
+     ;; Offset within a variable row: -, +, * are vertically stacked with 40px spacing
      (define offset
-       (cond [(eq? tag '-) 0] [(eq? tag '+) 18] [(eq? tag '*) 36] [else 18]))
+       (cond [(eq? tag '-) 0] [(eq? tag '+) 40] [(eq? tag '*) 80] [else 40]))
      (pos (* x-step j) (+ (* y-step i) offset) "var" i j (format "~a" tag))]
     [(and (integer? arity) (= arity 2))
      (define i (normalize-int (_1s v)))
      (define tag (_2s v))
-     (pos (* x-step (+ max-j 1)) (+ (* y-step i) 18) "var-tail" i (add1 max-j) (format "~a" tag))]
+     ;; var-tail nodes (V^ or V$) centered vertically in the row
+     (pos (* x-step (+ max-j 1)) (+ (* y-step i) 40) "var-tail" i (add1 max-j) (format "~a" tag))]
     [(and (integer? arity) (= arity 1))
      (define a (_1s v))
      (cond
        [(symbol? a)
         (define is-s (eq? a 's))
-        (define x (if is-s (- x-step) (* x-step (+ max-j 2))))
-        (define y (+ (* y-step (+ max-i 1)) 18))
+        (define x (if is-s (* x-step -1) (* x-step (+ max-j 2))))
+        (define y (+ (* y-step (quotient (+ max-i 1) 2)) 40))  ;; Center vertically
         (pos x y "terminal" #f #f (format "~a" a))]
        [else
         (define j (normalize-int a))
-        (pos (* x-step j) 18 "clause" #f j #f)])]
+        (pos (* x-step j) -30 "clause" #f j #f)])]  ;; Clause nodes above the graph
     [else (pos 0 0 "other" #f #f #f)]))
 
 (define (bounds nodes)
@@ -219,8 +221,8 @@
       (hash-set! edges (edge-id u v) (list u v))))
 
   (define-values (max-i max-j) (compute-max-indices nodes))
-  (define x-step 220)
-  (define y-step 90)
+  (define x-step 100)  ;; Horizontal spacing between clause columns
+  (define y-step 150)  ;; Vertical spacing between variable rows (accommodates -, +, * offset)
 
   (define node-labels (sort (hash-keys nodes) string<?))
   (define node-id-map
@@ -923,19 +925,33 @@ let stepIndex = 0;
 
 // Parse an el-style label like "(el 1ₚ 2ₚ '+)" into components
 function parseElLabel(label) {
-  // Match patterns like (el X) or (el X Y) or (el X Y Z)
+  // Match patterns like <1ₚ, 2ₚ, +> or (el X Y Z)
   // Handle subscript numbers like 1ₚ, 2ₚ
-  const cleaned = label.replace(/[()]/g, '').trim();
+  const cleaned = label.replace(/[()<>]/g, '').trim();
+
+  // Try comma-separated format first: "1ₚ, 2ₚ, +"
+  if (cleaned.includes(',')) {
+    const args = cleaned.split(/,\s*/).map(p => {
+      return p.replace(/ₚ/g, '').replace(/'/g, '').trim();
+    });
+    return { type: 'el', args };
+  }
+
+  // Try space-separated format: "el X Y Z"
   const parts = cleaned.split(/\s+/);
+  if (parts[0] === 'el') {
+    const args = parts.slice(1).map(p => {
+      return p.replace(/ₚ/g, '').replace(/'/g, '');
+    });
+    return { type: 'el', args };
+  }
 
-  if (parts[0] !== 'el') return null;
+  // Single value
+  if (cleaned.length > 0) {
+    return { type: 'el', args: [cleaned.replace(/ₚ/g, '').replace(/'/g, '')] };
+  }
 
-  const args = parts.slice(1).map(p => {
-    // Remove subscript markers and quotes
-    return p.replace(/ₚ/g, '').replace(/'/g, '');
-  });
-
-  return { type: 'el', args };
+  return null;
 }
 
 // Generate a compact label from parsed el components
@@ -949,14 +965,13 @@ function formatCompactLabel(parsed) {
     if (val === 's' || val === 't') return val;
     return `C${val}`;
   } else if (args.length === 2) {
-    // Two args: (i, tag) like (1, ^)
+    // Two args: (i, tag) like (1, ^) or (1, $)
     const [i, tag] = args;
-    if (tag === '^') return `${i}^`;
-    return `${i},${tag}`;
+    return `${i}${tag}`;
   } else if (args.length === 3) {
     // Three args: (i, j, tag) like (1, 2, +)
     const [i, j, tag] = args;
-    return `${i},${j}${tag}`;
+    return `${i}.${j}${tag}`;
   }
   return null;
 }
@@ -1170,9 +1185,9 @@ function initGraphRenderer() {
         'text-halign': 'center',
         'background-color': '#ffffff',
         'color': '#000',
-        'font-size': '10px',
-        'width': 28,
-        'height': 28,
+        'font-size': '9px',
+        'width': 36,
+        'height': 36,
         'border-color': '#000000',
         'border-width': 2
       }
@@ -1180,11 +1195,11 @@ function initGraphRenderer() {
     // Fallback styles for nodes without layout config
     {
       selector: 'node[kind="clause"]',
-      style: { 'background-color': '#888888', 'shape': 'rectangle', 'width': 36, 'height': 24, 'border-width': 2 }
+      style: { 'background-color': '#888888', 'shape': 'rectangle', 'width': 44, 'height': 28, 'border-width': 2 }
     },
     {
       selector: 'node[kind="terminal"]',
-      style: { 'background-color': '#333333', 'color': '#ffffff', 'shape': 'diamond', 'width': 32, 'height': 32, 'border-width': 2 }
+      style: { 'background-color': '#333333', 'color': '#ffffff', 'shape': 'diamond', 'width': 40, 'height': 40, 'border-width': 2 }
     },
     {
       selector: 'edge',
