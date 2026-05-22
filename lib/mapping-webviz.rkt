@@ -239,8 +239,8 @@ header h1 { margin: 0; font-size: 18px; font-weight: 600; }
 .content {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 40px 1fr;
-  gap: 0;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
   padding: 20px;
   overflow: auto;
   align-items: start;
@@ -258,13 +258,6 @@ header h1 { margin: 0; font-size: 18px; font-weight: 600; }
   color: #666;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-.arrow-col {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  color: #999;
 }
 table {
   width: 100%;
@@ -284,6 +277,8 @@ th {
 tr.new td { background: #e0e0e0; }
 tr.gadget td { background: #d0d0d0; }
 tr.hidden { opacity: 0.25; }
+tr.highlight td { background: #b3d9ff !important; }
+tr[data-name] { cursor: pointer; }
 .extras {
   margin-top: 16px;
   padding-top: 12px;
@@ -327,7 +322,6 @@ tr.hidden { opacity: 0.25; }
     <h2>Source Instance</h2>
     <div id="sourceContent"></div>
   </div>
-  <div class="arrow-col">&rarr;</div>
   <div class="panel" id="targetPanel">
     <h2>Target Instance</h2>
     <div id="targetContent"></div>
@@ -360,7 +354,7 @@ function renderSource() {
 
   let html = '<table><thead><tr><th>Object</th><th>Value</th></tr></thead><tbody>';
   for (const obj of data.sourceInstance.objects) {
-    html += `<tr><td>${obj.name}</td><td>${obj.value}</td></tr>`;
+    html += `<tr data-name="${obj.name}" data-panel="source"><td>${obj.name}</td><td>${obj.value}</td></tr>`;
   }
   html += '</tbody></table>';
 
@@ -373,6 +367,22 @@ function renderSource() {
   }
 
   container.innerHTML = html;
+
+  // Add hover handlers for correspondence
+  container.querySelectorAll('tr[data-name]').forEach(row => {
+    row.addEventListener('mouseenter', () => highlightCorresponding(row.dataset.name, true));
+    row.addEventListener('mouseleave', () => highlightCorresponding(row.dataset.name, false));
+  });
+}
+
+function highlightCorresponding(name, highlight) {
+  document.querySelectorAll(`tr[data-name="${name}"]`).forEach(row => {
+    if (highlight) {
+      row.classList.add('highlight');
+    } else {
+      row.classList.remove('highlight');
+    }
+  });
 }
 
 function renderTarget() {
@@ -404,7 +414,7 @@ function renderTarget() {
     else if (isVisible && isNew) rowClass = 'new';
 
     const valueDisplay = isVisible ? obj.value : '&mdash;';
-    html += `<tr class="${rowClass}"><td>${obj.name}</td><td>${valueDisplay}</td></tr>`;
+    html += `<tr class="${rowClass}" data-name="${obj.name}" data-panel="target"><td>${obj.name}</td><td>${valueDisplay}</td></tr>`;
   }
   html += '</tbody></table>';
 
@@ -417,6 +427,12 @@ function renderTarget() {
   `;
 
   container.innerHTML = html;
+
+  // Add hover handlers for correspondence
+  container.querySelectorAll('tr[data-name]').forEach(row => {
+    row.addEventListener('mouseenter', () => highlightCorresponding(row.dataset.name, true));
+    row.addEventListener('mouseleave', () => highlightCorresponding(row.dataset.name, false));
+  });
 }
 
 function setStep(n) {

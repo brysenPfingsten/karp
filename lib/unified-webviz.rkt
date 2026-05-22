@@ -733,8 +733,8 @@ header h1 { margin: 0; font-size: 18px; font-weight: 600; }
 }
 .mapping-content {
   display: grid;
-  grid-template-columns: 1fr 40px 1fr;
-  gap: 0;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
   align-items: start;
 }
 .panel {
@@ -750,13 +750,6 @@ header h1 { margin: 0; font-size: 18px; font-weight: 600; }
   color: #666;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-.arrow-col {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  color: #999;
 }
 table {
   width: 100%;
@@ -776,6 +769,13 @@ th {
 tr.new td { background: #e0e0e0; }
 tr.gadget td { background: #d0d0d0; }
 tr.hidden { opacity: 0.25; }
+tr.highlight td { background: #b3d9ff !important; }
+tr[data-name] { cursor: pointer; }
+.edge { cursor: pointer; }
+.edge.highlight { background: #b3d9ff !important; }
+.clause.highlight { background: #b3d9ff !important; border-color: #3498db; }
+.cnf-display .clause-row { cursor: pointer; padding: 6px 8px; margin: 2px 0; border-radius: 4px; }
+.cnf-display .clause-row.highlight { background: #b3d9ff; }
 .extras {
   margin-top: 16px;
   padding-top: 12px;
@@ -811,8 +811,8 @@ tr.hidden { opacity: 0.25; }
 }
 .sat-content {
   display: grid;
-  grid-template-columns: 1fr 40px 1fr;
-  gap: 0;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
   align-items: start;
 }
 .clause {
@@ -885,7 +885,6 @@ cytoscape-src
         <h2>Source Instance</h2>
         <div id="sourceContent"></div>
       </div>
-      <div class="arrow-col">&rarr;</div>
       <div class="panel" id="targetPanel">
         <h2>Target Instance</h2>
         <div id="targetContent"></div>
@@ -898,7 +897,6 @@ cytoscape-src
         <h2>Source Instance</h2>
         <div id="satSourceContent"></div>
       </div>
-      <div class="arrow-col">&rarr;</div>
       <div class="panel" id="satTargetPanel">
         <h2>Target Instance (CNF)</h2>
         <div id="satTargetContent"></div>
@@ -1054,11 +1052,12 @@ function initGraphRenderer() {
     if (data.graph.sourceInstance.type === 'cnf') {
       html += '<div class="cnf-display">';
       data.graph.sourceInstance.clauses.forEach((clause, i) => {
-        html += '<div class="clause-row">(';
+        const vars = clause.map(lit => lit.var).join(',');
+        html += `<div class="clause-row" data-clause-idx="${i + 1}" data-vars="${vars}">(`;
         html += clause.map(lit => {
           const cls = lit.positive ? 'positive' : 'negative';
           const prefix = lit.positive ? '' : '¬';
-          return `<span class="literal ${cls}">${prefix}${lit.var}</span>`;
+          return `<span class="literal ${cls}" data-var="${lit.var}">${prefix}${lit.var}</span>`;
         }).join(' <span class="or-symbol">∨</span> ');
         html += ')</div>';
       });
@@ -1074,6 +1073,12 @@ function initGraphRenderer() {
     }
 
     container.innerHTML = html;
+
+    // Add hover handlers for CNF-to-graph correspondence
+    container.querySelectorAll('.clause-row[data-clause-idx]').forEach(clauseRow => {
+      clauseRow.addEventListener('mouseenter', () => highlightGraphFromCnf(clauseRow, true));
+      clauseRow.addEventListener('mouseleave', () => highlightGraphFromCnf(clauseRow, false));
+    });
   }
 
   const elements = [];
@@ -1285,6 +1290,41 @@ function updateGraphStep() {
   });
 }
 
+function highlightGraphFromCnf(clauseRow, highlight) {
+  if (!cy) return;
+
+  const clauseIdx = clauseRow.dataset.clauseIdx;
+  const vars = clauseRow.dataset.vars ? clauseRow.dataset.vars.split(',') : [];
+
+  // Highlight/unhighlight the clause row
+  if (highlight) {
+    clauseRow.classList.add('highlight');
+  } else {
+    clauseRow.classList.remove('highlight');
+  }
+
+  // Highlight clause selector nodes (nodes where the label contains the clause index)
+  cy.nodes().forEach(node => {
+    const label = node.data('originalLabel') || node.data('label') || '';
+    const kind = node.data('kind');
+
+    // Check if this is a clause node with matching index
+    // Clause nodes typically have labels like "(el 1)" for clause 1
+    if (kind === 'clause') {
+      const match = label.match(/el\s+(\d+)/);
+      if (match && match[1] === clauseIdx) {
+        if (highlight) {
+          node.style('border-width', 4);
+          node.style('border-color', '#3498db');
+        } else {
+          node.style('border-width', 2);
+          node.style('border-color', '#000000');
+        }
+      }
+    }
+  });
+}
+
 // ============================================================================
 // Mapping Renderer
 // ============================================================================
@@ -1312,7 +1352,7 @@ function renderMappingSource() {
 
   let html = '<table><thead><tr><th>Object</th><th>Value</th></tr></thead><tbody>';
   for (const obj of data.mapping.sourceInstance.objects) {
-    html += `<tr><td>${obj.name}</td><td>${obj.value}</td></tr>`;
+    html += `<tr data-name="${obj.name}" data-panel="source"><td>${obj.name}</td><td>${obj.value}</td></tr>`;
   }
   html += '</tbody></table>';
 
@@ -1325,6 +1365,23 @@ function renderMappingSource() {
   }
 
   container.innerHTML = html;
+
+  // Add hover handlers for correspondence
+  container.querySelectorAll('tr[data-name]').forEach(row => {
+    row.addEventListener('mouseenter', () => highlightCorrespondingMapping(row.dataset.name, true));
+    row.addEventListener('mouseleave', () => highlightCorrespondingMapping(row.dataset.name, false));
+  });
+}
+
+function highlightCorrespondingMapping(name, highlight) {
+  // Highlight all rows with this name in both source and target
+  document.querySelectorAll(`tr[data-name="${name}"]`).forEach(row => {
+    if (highlight) {
+      row.classList.add('highlight');
+    } else {
+      row.classList.remove('highlight');
+    }
+  });
 }
 
 function updateMappingStep() {
@@ -1358,7 +1415,7 @@ function updateMappingStep() {
     else if (isVisible && isNew) rowClass = 'new';
 
     const valueDisplay = isVisible ? obj.value : '&mdash;';
-    html += `<tr class="${rowClass}"><td>${obj.name}</td><td>${valueDisplay}</td></tr>`;
+    html += `<tr class="${rowClass}" data-name="${obj.name}" data-panel="target"><td>${obj.name}</td><td>${valueDisplay}</td></tr>`;
   }
   html += '</tbody></table>';
 
@@ -1371,6 +1428,12 @@ function updateMappingStep() {
   `;
 
   container.innerHTML = html;
+
+  // Add hover handlers for correspondence
+  container.querySelectorAll('tr[data-name]').forEach(row => {
+    row.addEventListener('mouseenter', () => highlightCorrespondingMapping(row.dataset.name, true));
+    row.addEventListener('mouseleave', () => highlightCorrespondingMapping(row.dataset.name, false));
+  });
 }
 
 // ============================================================================
@@ -1395,8 +1458,9 @@ function renderSatSource() {
     html += '<div class="source-graph">';
     html += '<strong>Vertices:</strong> ' + data.sat.sourceInstance.vertices.join(', ');
     html += '<br><br><strong>Edges:</strong><br>';
-    for (const edge of data.sat.sourceInstance.edges) {
-      html += `<span class="edge">{${edge.u}, ${edge.v}}</span> `;
+    for (let i = 0; i < data.sat.sourceInstance.edges.length; i++) {
+      const edge = data.sat.sourceInstance.edges[i];
+      html += `<span class="edge" data-edge-idx="${i}" data-u="${edge.u}" data-v="${edge.v}">{${edge.u}, ${edge.v}}</span> `;
     }
     html += '</div>';
   }
@@ -1410,6 +1474,50 @@ function renderSatSource() {
   }
 
   container.innerHTML = html;
+
+  // Add hover handlers for edge-to-clause correspondence
+  container.querySelectorAll('.edge[data-edge-idx]').forEach(edgeEl => {
+    edgeEl.addEventListener('mouseenter', () => highlightSatCorrespondence(edgeEl, true));
+    edgeEl.addEventListener('mouseleave', () => highlightSatCorrespondence(edgeEl, false));
+  });
+}
+
+function highlightSatCorrespondence(edgeEl, highlight) {
+  const u = edgeEl.dataset.u;
+  const v = edgeEl.dataset.v;
+
+  // Find clause that contains both u and v
+  document.querySelectorAll('.clause[data-clause-idx]').forEach(clauseEl => {
+    const vars = clauseEl.dataset.vars.split(',');
+    if (vars.includes(u) && vars.includes(v)) {
+      if (highlight) {
+        clauseEl.classList.add('highlight');
+        edgeEl.classList.add('highlight');
+      } else {
+        clauseEl.classList.remove('highlight');
+        edgeEl.classList.remove('highlight');
+      }
+    }
+  });
+}
+
+function highlightEdgeFromClause(clauseEl, highlight) {
+  const vars = clauseEl.dataset.vars.split(',');
+
+  // Find edge whose vertices match the clause variables
+  document.querySelectorAll('.edge[data-edge-idx]').forEach(edgeEl => {
+    const u = edgeEl.dataset.u;
+    const v = edgeEl.dataset.v;
+    if (vars.includes(u) && vars.includes(v)) {
+      if (highlight) {
+        edgeEl.classList.add('highlight');
+        clauseEl.classList.add('highlight');
+      } else {
+        edgeEl.classList.remove('highlight');
+        clauseEl.classList.remove('highlight');
+      }
+    }
+  });
 }
 
 function updateSatStep() {
@@ -1427,7 +1535,8 @@ function updateSatStep() {
   data.sat.clauses.forEach((clause, i) => {
     const isVisible = visibleIndices.has(i + 1);
     const cls = isVisible ? 'clause' : 'clause hidden';
-    html += `<div class="${cls}">`;
+    const vars = clause.literals.map(lit => lit.var).join(',');
+    html += `<div class="${cls}" data-clause-idx="${i}" data-vars="${vars}">`;
     html += clause.literals.map(lit => {
       const litCls = lit.positive ? 'literal positive' : 'literal negative';
       const prefix = lit.positive ? '' : '¬';
@@ -1445,6 +1554,12 @@ function updateSatStep() {
   `;
 
   container.innerHTML = html;
+
+  // Add hover handlers for clause-to-edge correspondence
+  container.querySelectorAll('.clause[data-clause-idx]').forEach(clauseEl => {
+    clauseEl.addEventListener('mouseenter', () => highlightEdgeFromClause(clauseEl, true));
+    clauseEl.addEventListener('mouseleave', () => highlightEdgeFromClause(clauseEl, false));
+  });
 }
 
 // ============================================================================
