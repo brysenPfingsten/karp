@@ -187,13 +187,13 @@ title
 </title>
 <style>
 :root {
-  --bg: #f6f3ea;
+  --bg: #ffffff;
   --panel-bg: #fff;
-  --border: #c7bea8;
+  --border: #cccccc;
   --ink: #1b1b1b;
-  --accent: #4a90d9;
-  --new: #2ecc71;
-  --gadget: #e74c3c;
+  --accent: #666666;
+  --new: #888888;
+  --gadget: #333333;
 }
 * { box-sizing: border-box; }
 body {
@@ -207,7 +207,7 @@ body {
 }
 header {
   padding: 12px 20px;
-  background: #f0eadc;
+  background: #f5f5f5;
   border-bottom: 2px solid #222;
 }
 header h1 { margin: 0; font-size: 18px; font-weight: 600; }
@@ -216,7 +216,7 @@ header h1 { margin: 0; font-size: 18px; font-weight: 600; }
   align-items: center;
   gap: 16px;
   padding: 10px 20px;
-  background: #efe7d6;
+  background: #f0f0f0;
   border-bottom: 1px solid var(--border);
 }
 .controls { display: flex; gap: 8px; align-items: center; }
@@ -281,8 +281,8 @@ th {
   font-weight: 600;
   color: #555;
 }
-tr.new td { background: #e8f5e9; }
-tr.gadget td { background: #ffebee; }
+tr.new td { background: #e0e0e0; }
+tr.gadget td { background: #d0d0d0; }
 tr.hidden { opacity: 0.25; }
 .extras {
   margin-top: 16px;
@@ -307,8 +307,8 @@ tr.hidden { opacity: 0.25; }
 }
 .legend-item { display: flex; align-items: center; gap: 6px; }
 .legend-color { width: 14px; height: 14px; border-radius: 2px; }
-.legend-color.new { background: #e8f5e9; border: 1px solid #a5d6a7; }
-.legend-color.gadget { background: #ffebee; border: 1px solid #ef9a9a; }
+.legend-color.new { background: #e0e0e0; border: 1px solid #999999; }
+.legend-color.gadget { background: #d0d0d0; border: 1px solid #888888; }
 </style>
 </head>
 <body>
