@@ -1062,13 +1062,17 @@ function matchesPattern(parsed, pattern) {
   if (pattern.type !== 'el') return false;
   if (parsed.args.length !== pattern.args.length) return false;
 
-  // Check each argument - variables (i, j) match any number, literals must match exactly
+  // Check each argument - variables (i, j) match any numeric value, literals must match exactly
   for (let k = 0; k < parsed.args.length; k++) {
     const pArg = pattern.args[k];
     const nArg = parsed.args[k];
 
-    // Variable names like 'i', 'j' match any numeric value
-    if (pArg === 'i' || pArg === 'j') continue;
+    // Variable names like 'i', 'j' match any numeric value (not strings like 's', 't', '^')
+    if (pArg === 'i' || pArg === 'j') {
+      // Only match if nArg is a numeric string
+      if (!/^\d+$/.test(nArg)) return false;
+      continue;
+    }
 
     // Otherwise must match exactly
     if (pArg !== nArg) return false;
@@ -1266,9 +1270,9 @@ function initGraphRenderer() {
 
   // Collect unique shape/color combinations and create selectors
   const seenConfigs = new Set();
-  data.graph.nodes.forEach(n => {
-    const shape = n.nodeShape;
-    const color = n.nodeColor;
+  elements.filter(e => e.data && (e.data.nodeShape || e.data.nodeColor)).forEach(e => {
+    const shape = e.data.nodeShape;
+    const color = e.data.nodeColor;
     if (shape || color) {
       const key = `${shape || 'default'}:${color || 'default'}`;
       if (!seenConfigs.has(key)) {
