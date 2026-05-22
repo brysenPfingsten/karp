@@ -979,11 +979,58 @@ function getLayoutLabel(originalLabel, layout) {
 }
 
 // Find layout config for a node (shape, color, role)
-function getNodeLayoutConfig(originalLabel, layout) {
+// nodeData has: i, j, tag, kind, label
+function getNodeLayoutConfig(nodeData, layout) {
   if (!layout) return null;
 
-  const parsed = parseElLabel(originalLabel);
-  if (!parsed) return null;
+  // Build args array from node data based on kind
+  const i = nodeData.i;
+  const j = nodeData.j;
+  const tag = nodeData.tag;
+  const kind = nodeData.kind;
+
+  let args = [];
+
+  // Build args based on node kind to match layout patterns:
+  // - var nodes: (el i j tag) -> [i, j, tag]
+  // - var-tail nodes: (el i '^) -> [i, tag]
+  // - terminal nodes: (el 's) or (el 't) -> [tag]
+  // - clause nodes: (el j) -> [j]
+
+  if (kind === 'terminal' && tag) {
+    args = [tag];
+  } else if (kind === 'clause' && j !== null && j !== undefined && j !== false) {
+    args = [String(j)];
+  } else if (kind === 'var-tail' && i !== null && i !== undefined && tag && tag !== 'false') {
+    // V^ nodes have pattern (el i '^) - don't include j
+    args = [String(i), tag];
+  } else if (kind === 'var') {
+    // Regular variable nodes: (el i j tag)
+    if (i !== null && i !== undefined && i !== false) {
+      args.push(String(i));
+    }
+    if (j !== null && j !== undefined && j !== false) {
+      args.push(String(j));
+    }
+    if (tag && tag !== 'false') {
+      args.push(tag);
+    }
+  } else {
+    // Fallback: include all available fields
+    if (i !== null && i !== undefined && i !== false) {
+      args.push(String(i));
+    }
+    if (j !== null && j !== undefined && j !== false) {
+      args.push(String(j));
+    }
+    if (tag && tag !== 'false') {
+      args.push(tag);
+    }
+  }
+
+  if (args.length === 0) return null;
+
+  const parsed = { type: 'el', args };
 
   // Search layout tree for matching place
   function findPlace(node) {
@@ -1085,7 +1132,7 @@ function initGraphRenderer() {
   data.graph.nodes.forEach(n => {
     // Use layout-aware labeling
     const displayLabel = data.layout ? getLayoutLabel(n.label, data.layout) : n.label;
-    const layoutConfig = data.layout ? getNodeLayoutConfig(n.label, data.layout) : null;
+    const layoutConfig = data.layout ? getNodeLayoutConfig(n, data.layout) : null;
 
     elements.push({
       data: {
