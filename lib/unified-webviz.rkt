@@ -221,7 +221,7 @@
       (hash-set! edges (edge-id u v) (list u v))))
 
   (define-values (max-i max-j) (compute-max-indices nodes))
-  (define x-step 100)  ;; Horizontal spacing between clause columns
+  (define x-step 140)  ;; Horizontal spacing between clause columns
   (define y-step 150)  ;; Vertical spacing between variable rows (accommodates -, +, * offset)
 
   (define node-labels (sort (hash-keys nodes) string<?))
@@ -546,11 +546,13 @@
         "children" children))
 
 ;; Parse place node
+;; Supports #:label for custom label templates using {i}, {j}, {tag}, {name}
 (define (parse-place name opts)
   (define match-pattern #f)
   (define role #f)
   (define shape #f)
   (define color #f)
+  (define label-template #f)
 
   (let loop ([remaining opts])
     (match remaining
@@ -567,6 +569,9 @@
       [`(#:color ,c . ,rest)
        (set! color (normalize-quoted-symbol c))
        (loop rest)]
+      [`(#:label ,l . ,rest)
+       (set! label-template (format "~a" l))
+       (loop rest)]
       [`(,_ . ,rest)
        (loop rest)]))
 
@@ -575,7 +580,8 @@
         "match" match-pattern
         "role" role
         "shape" shape
-        "color" color))
+        "color" color
+        "label" label-template))
 
 ;; Parse match pattern like (el i j '+)
 (define (parse-match-pattern pat)
@@ -785,7 +791,7 @@ tr[data-name] { cursor: pointer; }
 }
 .extra-row {
   display: flex;
-  justify-content: space-between;
+  gap: 4px;
   padding: 4px 0;
   font-size: 13px;
 }
@@ -843,6 +849,25 @@ tr[data-name] { cursor: pointer; }
   border-radius: 3px;
   margin: 2px;
   display: inline-block;
+}
+.source-graph-svg {
+  display: block;
+  margin: 0 auto;
+}
+.source-graph-svg .graph-edge {
+  cursor: pointer;
+  transition: stroke 0.15s, stroke-width 0.15s;
+}
+.source-graph-svg .graph-edge:hover,
+.source-graph-svg .graph-edge.highlight {
+  stroke: #0066cc;
+  stroke-width: 3;
+}
+.source-graph-svg .graph-vertex {
+  cursor: default;
+}
+.source-graph-svg .graph-vertex.highlight {
+  fill: #b3d9ff;
 }
 .cnf-display .clause-row {
   font-family: monospace;
@@ -976,8 +1001,24 @@ function formatCompactLabel(parsed) {
   return null;
 }
 
+// Apply a label template with variable substitution
+// Template can use {i}, {j}, {tag}, {name} placeholders
+function applyLabelTemplate(template, nodeData) {
+  if (!template) return null;
+  return template
+    .replace(/\{i\}/g, nodeData.i !== undefined ? String(nodeData.i) : '')
+    .replace(/\{j\}/g, nodeData.j !== undefined ? String(nodeData.j) : '')
+    .replace(/\{tag\}/g, nodeData.tag || '')
+    .replace(/\{name\}/g, nodeData.name || nodeData.id || '');
+}
+
 // Get a layout-aware label for a node
-function getLayoutLabel(originalLabel, layout) {
+function getLayoutLabel(originalLabel, layout, nodeData, layoutConfig) {
+  // If layout config has a custom label template, use it
+  if (layoutConfig && layoutConfig.label) {
+    return applyLabelTemplate(layoutConfig.label, nodeData);
+  }
+
   // Try to parse as el expression
   const parsed = parseElLabel(originalLabel);
   if (parsed) {
@@ -1056,7 +1097,8 @@ function getNodeLayoutConfig(nodeData, layout) {
         return {
           role: node.role,
           shape: node.shape,
-          color: node.color
+          color: node.color,
+          label: node.label
         };
       }
     }
@@ -1149,9 +1191,10 @@ function initGraphRenderer() {
 
   const elements = [];
   data.graph.nodes.forEach(n => {
-    // Use layout-aware labeling
-    const displayLabel = data.layout ? getLayoutLabel(n.label, data.layout) : n.label;
+    // Get layout config first (may include custom label template)
     const layoutConfig = data.layout ? getNodeLayoutConfig(n, data.layout) : null;
+    // Use layout-aware labeling with custom template support
+    const displayLabel = data.layout ? getLayoutLabel(n.label, data.layout, n, layoutConfig) : n.label;
 
     elements.push({
       data: {
@@ -1521,14 +1564,43 @@ function renderSatSource() {
 
   let html = '';
   if (data.sat.sourceInstance.type === 'graph') {
-    html += '<div class="source-graph">';
-    html += '<strong>Vertices:</strong> ' + data.sat.sourceInstance.vertices.join(', ');
-    html += '<br><br><strong>Edges:</strong><br>';
-    for (let i = 0; i < data.sat.sourceInstance.edges.length; i++) {
-      const edge = data.sat.sourceInstance.edges[i];
-      html += `<span class="edge" data-edge-idx="${i}" data-u="${edge.u}" data-v="${edge.v}">{${edge.u}, ${edge.v}}</span> `;
-    }
-    html += '</div>';
+    const vertices = data.sat.sourceInstance.vertices;
+    const edges = data.sat.sourceInstance.edges;
+    const n = vertices.length;
+
+    // Calculate positions in a circle
+    const size = 180;
+    const cx = size / 2;
+    const cy = size / 2;
+    const radius = size / 2 - 25;
+    const positions = {};
+    vertices.forEach((v, i) => {
+      const angle = (2 * Math.PI * i / n) - Math.PI / 2;
+      positions[v] = {
+        x: cx + radius * Math.cos(angle),
+        y: cy + radius * Math.sin(angle)
+      };
+    });
+
+    html += `<svg class="source-graph-svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`;
+
+    // Draw edges
+    edges.forEach((edge, i) => {
+      const p1 = positions[edge.u];
+      const p2 = positions[edge.v];
+      if (p1 && p2) {
+        html += `<line class="graph-edge" data-edge-idx="${i}" data-u="${edge.u}" data-v="${edge.v}" x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="#333" stroke-width="2"/>`;
+      }
+    });
+
+    // Draw vertices
+    vertices.forEach(v => {
+      const p = positions[v];
+      html += `<circle class="graph-vertex" data-vertex="${v}" cx="${p.x}" cy="${p.y}" r="16" fill="white" stroke="#333" stroke-width="2"/>`;
+      html += `<text x="${p.x}" y="${p.y}" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">${v}</text>`;
+    });
+
+    html += '</svg>';
   }
 
   if (data.sat.sourceInstance.extras && data.sat.sourceInstance.extras.length > 0) {
@@ -1542,7 +1614,7 @@ function renderSatSource() {
   container.innerHTML = html;
 
   // Add hover handlers for edge-to-clause correspondence
-  container.querySelectorAll('.edge[data-edge-idx]').forEach(edgeEl => {
+  container.querySelectorAll('.graph-edge[data-edge-idx]').forEach(edgeEl => {
     edgeEl.addEventListener('mouseenter', () => highlightSatCorrespondence(edgeEl, true));
     edgeEl.addEventListener('mouseleave', () => highlightSatCorrespondence(edgeEl, false));
   });
@@ -1570,8 +1642,8 @@ function highlightSatCorrespondence(edgeEl, highlight) {
 function highlightEdgeFromClause(clauseEl, highlight) {
   const vars = clauseEl.dataset.vars.split(',');
 
-  // Find edge whose vertices match the clause variables
-  document.querySelectorAll('.edge[data-edge-idx]').forEach(edgeEl => {
+  // Find edge whose vertices match the clause variables (SVG or HTML)
+  document.querySelectorAll('.graph-edge[data-edge-idx], .edge[data-edge-idx]').forEach(edgeEl => {
     const u = edgeEl.dataset.u;
     const v = edgeEl.dataset.v;
     if (vars.includes(u) && vars.includes(v)) {
