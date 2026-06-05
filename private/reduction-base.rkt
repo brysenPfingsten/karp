@@ -1,14 +1,14 @@
 #lang racket
 
 (require
-  "private/core-structures.rkt"
-  "private/primitive-data-type.rkt"
-  [rename-in "private/decision-problem.rkt"
+  "core-structures.rkt"
+  "primitive-data-type.rkt"
+  [rename-in "decision-problem.rkt"
              (define dp-define)]
   ; TODO(?): move this to decision-problem,
   ;          so that everything comes from decision problem
-  [only-in "private/dp-type-info.rkt" func-type-info]
-  "private/karp-contract.rkt"
+  [only-in "dp-type-info.rkt" func-type-info]
+  "karp-contract.rkt"
 
   [only-in racket/list
            (argmax lst-argmax)
@@ -46,8 +46,8 @@
 
 
 (provide
- [except-out (all-from-out "private/core-structures.rkt"
-                           "private/primitive-data-type.rkt")
+ [except-out (all-from-out "core-structures.rkt"
+                           "primitive-data-type.rkt")
               natural
               set-∈-safe
               set-∉-safe

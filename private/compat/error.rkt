@@ -7,6 +7,7 @@
 (require racket/contract/base
          racket/string
          racket/list
+         racket/match
          syntax/srcloc
          syntax/stx)
 
@@ -192,13 +193,11 @@ TODO
 ;; ----
 
 (define (field+detail-list->table who lst onto)
-  (cond [(null? lst) onto]
-        [else
-         (let ([field (car lst)]
-               [value (cadr lst)])
-           (cons (cons field value)
-                 (field+detail-list->table who (cddr lst) onto)))]))
-
+  (match lst
+    ['() onto]
+    [(list* field value d)
+     (cons (cons field value)
+           (field+detail-list->table who d onto))]))
 ;; Added by Jay
 
 (define (exn:not-break? x)

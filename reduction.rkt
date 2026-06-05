@@ -1,11 +1,11 @@
 #lang racket
 
-(require "reduction-base.rkt"
+(require "private/reduction-base.rkt"
          (except-in rosette/safe argmin argmax min max count define))
 
 (provide #%module-begin #%app #%datum #%top #%top-interaction
          (except-out
-          (all-from-out "reduction-base.rkt")
+          (all-from-out "private/reduction-base.rkt")
           dp-int-plus
           dp-int-minus
           dp-int-gt

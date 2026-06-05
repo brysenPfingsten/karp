@@ -4,7 +4,7 @@
 ;; for displaying better error message and avoid compatibility issue with Rosette
 
 (require "problem-definition-utility.rkt"
-         "modified/error.rkt"
+         "compat/error.rkt"
          (for-syntax racket/syntax
                      syntax/parse
                      syntax/stx

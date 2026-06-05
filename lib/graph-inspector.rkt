@@ -8,7 +8,7 @@
          (only-in "../private/core-structures.rkt"
                   dp-set-members->list
                   [set dp-set])
-         (only-in "modified/dot.rkt" dot-positioning)
+         (only-in "compat/dot.rkt" dot-positioning)
          "graph.rkt")
 
 (provide visualize render-graph/snip)

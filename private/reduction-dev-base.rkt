@@ -1,9 +1,9 @@
 #lang racket
 
-(require "../reduction-base.rkt")
+(require "reduction-base.rkt")
 
 (provide (except-out
-          (all-from-out "../reduction-base.rkt")
+          (all-from-out "reduction-base.rkt")
           dp-int-plus
           dp-int-minus
           dp-int-gt

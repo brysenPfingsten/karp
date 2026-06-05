@@ -1,6 +1,6 @@
 #lang racket
 
-(require [except-in "../reduction-base.rkt" define]
+(require [except-in "../private/reduction-base.rkt" define]
          [rename-in "mapping.rkt" [mapping m-mapping] ]
          [for-syntax syntax/parse
                      syntax/stx

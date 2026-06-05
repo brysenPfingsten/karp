@@ -1,7 +1,7 @@
 #lang racket/gui
 
 (require (rename-in
-          (except-in "../reduction-base.rkt"
+          (except-in "../private/reduction-base.rkt"
                     define)
           [set k-set])
          racket/control)
